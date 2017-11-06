@@ -158,7 +158,8 @@ start()
 
   log 'nfsd ready and waiting for client connections on port 2049.'
 
-  sleep infinity
+  # https://stackoverflow.com/questions/2935183/bash-infinite-sleep-infinite-blocking
+  while :; do sleep 2073600; done
 }
 
 setupTrap
