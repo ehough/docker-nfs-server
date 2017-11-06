@@ -6,6 +6,8 @@ log() {
 
 stop()
 {
+  log 'caught SIGTERM or SIGINT'
+
   log 'unexporting filesystems'
   /usr/sbin/exportfs -ua
 
@@ -19,15 +21,9 @@ stop()
   exit 0
 }
 
-onSigTermSigInt()
-{
-  log 'caught SIGTERM or SIGINT'
-  stop
-}
-
 setupTrap()
 {
-  trap 'onSigTermSigInt' SIGTERM SIGINT
+  trap 'stop' SIGTERM SIGINT
 }
 
 checkCommandResult()
@@ -163,24 +159,7 @@ start()
   log 'nfsd ready and waiting for client connections on port 2049.'
 }
 
-watch()
-{
-  while true; do
-
-    if [ -z "$(pidof rpc.mountd)" ]; then
-
-      log 'services have died - attempting clean exit'
-      stop
-    fi
-
-    # check again every 5 seconds
-    sleep 5
-
-  done
-}
-
 setupTrap
 buildExports
 checkPrereqs
 start
-watch
