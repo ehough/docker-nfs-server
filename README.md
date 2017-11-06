@@ -6,7 +6,7 @@ A lightweight, robust, flexible, and containerized NFS v4 server.
 
 There are no other containerized NFS servers that offer **all** of the following:
 
-- a pure NFS version 4 server (i.e. no `rpcbind`)
+- a version-4-only NFS server (i.e. no `rpcbind`)
 - flexible construction of `/etc/exports` via a Docker bind mount *or* environment variables
 - clean teardown of services upon `SIGTERM` or `SIGKILL`
 - lightweight image based on Alpine Linux
@@ -23,7 +23,7 @@ There are no other containerized NFS servers that offer **all** of the following
 
 The container expects you to supply it with your NFS exports. You have **two choices** for doing this:
 
-1. **Bind mount your exports file into the container at `/etc/exports`**.
+1. **Bind mount an exports file into the container at `/etc/exports`**.
 
        docker run \
          -v /host/path/to/exports.txt:/etc/exports:ro \
@@ -71,7 +71,7 @@ The container expects you to supply it with your NFS exports. You have **two cho
        ----> will export /nfs to * with options ro,no_subtree_check
        ----> will export 1 filesystem(s)
        ----> /etc/exports now contains the following contents:
-       /nfs *(ro,no_subtree_check)
+       /nfs *(ro,no_subtree_check,fsid=0)
        ----> checking for presence of kernel module: nfs
        ----> checking for presence of kernel module: nfsd
        ----> requirements look good; we should be able to run continue without issues.
