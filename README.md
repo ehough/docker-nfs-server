@@ -30,7 +30,7 @@ The container expects you to supply it with your NFS exports. You have **two cho
          -v /host/files:/nfs \
          --cap-add SYS_ADMIN \
          -p 2049:2049 \
-         ehough/docker-nfs4-server:latest`
+         erichough/nfs4-server:latest`
          
    A successful start of this form will look like this:
    
@@ -63,7 +63,7 @@ The container expects you to supply it with your NFS exports. You have **two cho
          -v /host/files:/nfs \
          --cap-add SYS_ADMIN \
          -p 2049:2049 \
-         ehough/docker-nfs4-server:latest`
+         erichough/nfs4-server:latest`
          
    A successful start of this form will look like this:
 
