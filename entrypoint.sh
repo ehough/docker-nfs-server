@@ -157,6 +157,8 @@ start()
   done
 
   log 'nfsd ready and waiting for client connections on port 2049.'
+
+  sleep infinity
 }
 
 setupTrap
