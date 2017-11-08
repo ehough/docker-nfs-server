@@ -211,6 +211,7 @@ start()
   /usr/sbin/exportfs -arv
   assertLastCommand 'exportfs failed'
 
+  # yes, rpc.mountd is still required for NFS v4: https://forums.gentoo.org/viewtopic-p-7724856.html#7724856
   log "starting rpc.mountd with version $nfsVersion"
   /usr/sbin/rpc.mountd --debug all --no-nfs-version 2 --no-nfs-version 3 --nfs-version "$nfsVersion"
   assertLastCommand 'rpc.mountd failed'
