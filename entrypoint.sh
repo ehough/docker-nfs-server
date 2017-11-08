@@ -44,18 +44,63 @@ ensureKernelModule()
   checkCommandResult "$1 module is not loaded on the Docker host's kernel (try: modprobe $1)"
 }
 
+checkUserEnvNfsdPort()
+{
+  if [[ -n "$NFSD_PORT" && ( "$NFSD_PORT" -lt 1 || "$NFSD_PORT" -gt 65535 ) ]]; then
+
+    log 'Please set NFSD_PORT to a value between 1 and 65535 inclusive'
+    exit 1
+  fi
+}
+
+checkUserEnvNfsVersion()
+{
+  if [ -z "$NFS_VERSION" ]; then
+    return
+  fi
+
+  local allowed=('4' '4.1' '4.2')
+
+  for allowedVersion in "${allowed[@]}"; do
+
+    if [[ "$allowedVersion" == "$NFS_VERSION" ]]; then
+      return
+    fi
+  done
+
+  log 'Please set NFS_VERSION to 4, 4.1, or 4.2'
+  exit 1
+}
+
+checkUserEnvNfsdServerThreads()
+{
+  if [[ -n "$NFSD_SERVER_THREADS" && "$NFSD_SERVER_THREADS" -lt 1 ]]; then
+
+    log 'Please set NFSD_SERVER_THREADS to a positive value'
+    exit 1
+  fi
+}
+
 checkPrereqs()
 {
+  # check kernel modules
   ensureKernelModule nfs
   ensureKernelModule nfsd
 
+  # ensure /etc/exports has at least one line
   grep -Evq '^\s*#|^\s*$' /etc/exports
   checkCommandResult '/etc/exports has no exports'
 
+  # ensure we have CAP_SYS_ADMIN
   capsh --print | grep -Eq "^Current: = .*,?cap_sys_admin(,|$)"
   checkCommandResult 'missing CAP_SYS_ADMIN. be sure to run Docker with --cap-add SYS_ADMIN or --privileged'
 
-  log 'requirements look good; we should be able to run continue without issues.'
+  # validate any user-supplied environment variables
+  checkUserEnvNfsdPort
+  checkUserEnvNfsVersion
+  checkUserEnvNfsdServerThreads
+
+  log 'requirements look good'
 }
 
 buildExports()
@@ -123,6 +168,10 @@ buildExports()
 
 start()
 {
+  local nfsdThreads=${NFSD_SERVER_THREADS:-$(grep -c ^processor /proc/cpuinfo)}
+  local nfsVersion=${NFS_VERSION:-4.2}
+  local nfsPort=${NFSD_PORT:-2049}
+
   while [ -z "$(pidof rpc.mountd)" ]; do
 
     # rpcbind isn't required for NFSv4, but if it's not running then nfsd takes over 5 minutes to start up.
@@ -132,8 +181,8 @@ start()
     /sbin/rpcbind -ds
     checkCommandResult 'rpcbind failed'
 
-    log 'starting rpc.nfsd'
-    /usr/sbin/rpc.nfsd --debug 8 --no-nfs-version 2 --no-nfs-version 3 --nfs-version 4.2
+    log "starting rpc.nfsd on port $nfsPort with version $nfsVersion and $nfsdThreads server thread(s)"
+    /usr/sbin/rpc.nfsd --debug 8 --no-nfs-version 2 --no-nfs-version 3 --nfs-version "$nfsVersion" "$nfsdThreads"
     checkCommandResult 'rpc.nfsd failed'
 
     log 'killing rpcbind now that rpc.nfsd is up'
@@ -144,8 +193,8 @@ start()
     /usr/sbin/exportfs -arv
     checkCommandResult 'exportfs failed'
 
-    log 'starting rpc.mountd'
-    /usr/sbin/rpc.mountd --debug all --no-nfs-version 2 --no-nfs-version 3 --nfs-version 4.2
+    log "starting rpc.mountd with version $nfsVersion"
+    /usr/sbin/rpc.mountd --debug all --no-nfs-version 2 --no-nfs-version 3 --nfs-version "$nfsVersion"
     checkCommandResult 'rpc.mountd failed'
 
     if [ -z "$(pidof rpc.mountd)" ]; then
@@ -156,7 +205,7 @@ start()
 
   done
 
-  log 'nfsd ready and waiting for client connections on port 2049.'
+  log "nfsd ready and waiting for client connections on port $nfsPort"
 
   # https://stackoverflow.com/questions/2935183/bash-infinite-sleep-infinite-blocking
   while :; do sleep 2073600; done

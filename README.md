@@ -10,18 +10,19 @@ There are no other containerized NFS servers that offer **all** of the following
 - flexible construction of `/etc/exports` via a Docker bind mount *or* environment variables
 - clean teardown of services upon `SIGTERM` or `SIGKILL`
 - lightweight image based on Alpine Linux
+- ability to control server parameters via environment variables
 
 ## Requirements
 
 1. The Docker **host** kernel will need both the `nfs` and `nfsd` kernel modules. Usually you can enable them both with `modprobe nfs nfsd`.
-1. The container will need to run with `CAP_SYS_ADMIN`. This is necessary as the NFS server will need to perform internal filesystem mounts.
+1. The container will need to run with `CAP_SYS_ADMIN` (or `--privilged`). This is necessary as the NFS server will need to perform internal filesystem mounts.
 1. You will need to bind mount your exported filesystems into this container. e.g. `-v /some/path/on/host:/some/container/path`
 
 ## Usage
 
 ### Starting the container
 
-The container expects you to supply it with your NFS exports. You have **two choices** for doing this:
+The container requires you to supply it with your desired NFS exports. You have **two choices** for doing this:
 
 1. **Bind mount an exports file into the container at `/etc/exports`**.
 
@@ -39,7 +40,7 @@ The container expects you to supply it with your NFS exports. You have **two cho
        ----> checking for presence of kernel module: nfsd
        ----> requirements look good; we should be able to run continue without issues.
        ----> starting rpcbind temporarily to allow rpc.nfsd to start quickly
-       ----> starting rpc.nfsd
+       ----> starting rpc.nfsd on port 2049 with version 4.2 and 8 server thread(s)
        rpc.nfsd: knfsd is currently down
        rpc.nfsd: Writing version string to kernel: +4.2 -2 -3 +4
        rpc.nfsd: Created AF_INET TCP socket.
@@ -49,7 +50,7 @@ The container expects you to supply it with your NFS exports. You have **two cho
        ----> killing rpcbind now that rpc.nfsd is up
        ----> exporting filesystems
        exporting *:/nfs
-       ----> starting rpc.mountd
+       ----> starting rpc.mountd with version 4.2
        ----> nfsd ready and waiting for client connections on port 2049.
          
 1. **Supply environment variable triplets to the container to allow it to construct `/etc/exports`**.
@@ -76,7 +77,7 @@ The container expects you to supply it with your NFS exports. You have **two cho
        ----> checking for presence of kernel module: nfsd
        ----> requirements look good; we should be able to run continue without issues.
        ----> starting rpcbind temporarily to allow rpc.nfsd to start quickly
-       ----> starting rpc.nfsd
+       ----> starting rpc.nfsd on port 2049 with version 4.2 and 8 server thread(s)
        rpc.nfsd: knfsd is currently down
        rpc.nfsd: Writing version string to kernel: +4.2 -2 -3 +4
        rpc.nfsd: Created AF_INET TCP socket.
@@ -86,14 +87,30 @@ The container expects you to supply it with your NFS exports. You have **two cho
        ----> killing rpcbind now that rpc.nfsd is up
        ----> exporting filesystems
        exporting *:/nfs
-       ----> starting rpc.mountd
+       ----> starting rpc.mountd with version 4.2
        ----> nfsd ready and waiting for client connections on port 2049.
+
+### Additional tweaks
+
+Via optional environment variables, you can further adjust the server settings.
+
+- **`NFSD_PORT`** (default is `2049`)
+
+  Set this to any valid port number (`1` - `65535` inclusive) to change server's listening port.
+
+- **`NFSD_SERVER_THREADS`** (default is *CPU core count*)
+
+  Set this to a positive integer to control how many server threads rpc.nfsd will use. A good minimum is one thread per CPU core, but 4 or 8 threads per core is recommended.
+  
+- **`NFS_VERSION`** (default is `4.2`)
+
+  Set to `4`, `4.1`, or `4.2` to fine tune the NFS protocol version. Note that any minor version will also enable any lesser minor versions. e.g. `4.2` will enable `4.2`, `4.1`, *and* `4`.
 
 ### Mounting filesystems from a client
 
 `# mount -o nfsvers=4 <container-IP>:/some/export /some/local/path`
 
-### Connecting to the container
+### Connecting to the running container
 
 `# docker exec -it <container-id> bash`
 
