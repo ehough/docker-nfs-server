@@ -8,14 +8,14 @@ This is the only containerized NFS server that offers **all** of the following f
 
 - a version-4-only NFS server (no `rpcbind`, no port mapping, etc)
 - flexible construction of `/etc/exports` via a Docker bind mount *or* environment variables
-- clean teardown of services upon `SIGTERM` or `SIGKILL`
-- lightweight image based on Alpine Linux
+- clean teardown of services upon `SIGTERM` or `SIGKILL` (no lingering `nfsd` processes on Docker host)
+- lightweight image based on [Alpine Linux](https://alpinelinux.org/)
 - ability to control server parameters via environment variables
 
 ## Requirements
 
 1. The Docker **host** kernel will need both the `nfs` and `nfsd` kernel modules. Usually you can enable them both with `modprobe nfs nfsd`.
-1. The container will need to run with `CAP_SYS_ADMIN` (or `--privilged`). This is necessary as the NFS server will need to perform internal filesystem mounts.
+1. The container will need to run with `CAP_SYS_ADMIN` (or `--privilged`). This is necessary as the NFS server needs to mount several filesystems inside the container to support its operation.
 1. You will need to bind mount your exported filesystems into this container. e.g. `-v /some/path/on/host:/some/container/path`
 
 ## Usage
@@ -100,7 +100,7 @@ Via optional environment variables, you can further adjust the server settings.
 
 - **`NFSD_SERVER_THREADS`** (default is *CPU core count*)
 
-  Set this to a positive integer to control how many server threads rpc.nfsd will use. A good minimum is one thread per CPU core, but 4 or 8 threads per core is recommended.
+  Set this to a positive integer to control how many server threads rpc.nfsd will use. A good minimum is one thread per CPU core, but 4 or 8 threads per core is probably better.
   
 - **`NFS_VERSION`** (default is `4.2`)
 
@@ -120,7 +120,7 @@ Via optional environment variables, you can further adjust the server settings.
 
 ## Remaining tasks
 
-- figure out why `rpcbind` is *temporarily* required to start `rpc.nfsd` without a 5 minute delay
+- figure out why `rpc.nfsd` takes 5 minutes to startup/timeout unless `rpcbind` is running
 - add `rpc.idmapd`
 - add NFS v4 security (`rpc.svcgssd`, `rpc.gssd`, etc.)
 
