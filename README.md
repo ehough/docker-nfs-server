@@ -4,9 +4,9 @@ A lightweight, robust, flexible, and containerized NFS v4 server.
 
 ## Why?
 
-There are no other containerized NFS servers that offer **all** of the following:
+This is the only containerized NFS server that offers **all** of the following features:
 
-- a version-4-only NFS server (i.e. no `rpcbind`)
+- a version-4-only NFS server (no `rpcbind`, no port mapping, etc)
 - flexible construction of `/etc/exports` via a Docker bind mount *or* environment variables
 - clean teardown of services upon `SIGTERM` or `SIGKILL`
 - lightweight image based on Alpine Linux
@@ -22,7 +22,7 @@ There are no other containerized NFS servers that offer **all** of the following
 
 ### Starting the container
 
-The container requires you to supply it with your desired NFS exports. You have **two choices** for doing this:
+The container requires you to supply it with your desired [NFS exports](https://linux.die.net/man/5/exports) upon startup. You have **two choices** for doing this:
 
 1. **Bind mount an exports file into the container at `/etc/exports`**.
 
@@ -108,15 +108,21 @@ Via optional environment variables, you can further adjust the server settings.
 
 ### Mounting filesystems from a client
 
-`# mount -o nfsvers=4 <container-IP>:/some/export /some/local/path`
-
+    # mount -o nfsvers=4 <container-IP>:/some/export /some/local/path
+    
 ### Connecting to the running container
 
-`# docker exec -it <container-id> bash`
+    # docker exec -it <container-id> bash
 
 ## Performance considerations
 
-- Running the container with `--network=host` should improve network performance by 10% - 20% [[1](https://jtway.co/docker-network-performance-b95bce32b4b9),[2](https://www.percona.com/blog/2016/08/03/testing-docker-multi-host-network-performance/)], though this hasn't been tested.
+- Running the container with `--network=host` *might* improve network performance by 10% - 20% [[1](https://jtway.co/docker-network-performance-b95bce32b4b9),[2](https://www.percona.com/blog/2016/08/03/testing-docker-multi-host-network-performance/)], though this hasn't been tested.
+
+## Remaining tasks
+
+- figure out why `rpcbind` is *temporarily* required to start `rpc.nfsd` without a 5 minute delay
+- add `rpc.idmapd`
+- add NFS v4 security (`rpc.svcgssd`, `rpc.gssd`, etc.)
 
 ## Acknowledgements
 
