@@ -4,18 +4,28 @@ log() {
     echo "----> $1"
 }
 
+warnIfFailed()
+{
+  if [ $? -ne 0 ]; then
+    log "WARNING: $1"
+  fi
+}
+
 stop()
 {
-  log 'caught SIGTERM or SIGINT'
+  log 'caught SIGTERM, SIGINT, or SIGKILL'
 
   log 'unexporting filesystems'
   /usr/sbin/exportfs -ua
+  warnIfFailed 'unable to unexport filesystems'
 
   log 'stopping nfsd'
-  /usr/sbin/rpc.nfsd --debug 8 0
+  /usr/sbin/rpc.nfsd 0
+  warnIfFailed 'unable to stop nfsd'
 
   log 'killing mountd'
   kill -TERM "$(pidof rpc.mountd)"
+  warnIfFailed 'unable to kill mountd'
 
   log 'terminated cleanly'
   exit 0
@@ -23,10 +33,10 @@ stop()
 
 setupTrap()
 {
-  trap 'stop' SIGTERM SIGINT
+  trap stop SIGTERM SIGINT SIGKILL
 }
 
-checkCommandResult()
+assertLastCommand()
 {
   if [ $? -ne 0 ]; then
 
@@ -35,13 +45,13 @@ checkCommandResult()
   fi
 }
 
-ensureKernelModule()
+checkKernelModule()
 {
   log "checking for presence of kernel module: $1"
 
   lsmod | grep -Eq "^$1\\s+"
 
-  checkCommandResult "$1 module is not loaded on the Docker host's kernel (try: modprobe $1)"
+  assertLastCommand "$1 module is not loaded on the Docker host's kernel (try: modprobe $1)"
 }
 
 checkUserEnvNfsdPort()
@@ -84,16 +94,16 @@ checkUserEnvNfsdServerThreads()
 checkPrereqs()
 {
   # check kernel modules
-  ensureKernelModule nfs
-  ensureKernelModule nfsd
+  checkKernelModule nfs
+  checkKernelModule nfsd
 
   # ensure /etc/exports has at least one line
   grep -Evq '^\s*#|^\s*$' /etc/exports
-  checkCommandResult '/etc/exports has no exports'
+  assertLastCommand '/etc/exports has no exports'
 
   # ensure we have CAP_SYS_ADMIN
   capsh --print | grep -Eq "^Current: = .*,?cap_sys_admin(,|$)"
-  checkCommandResult 'missing CAP_SYS_ADMIN. be sure to run Docker with --cap-add SYS_ADMIN or --privileged'
+  assertLastCommand 'missing CAP_SYS_ADMIN. be sure to run Docker with --cap-add SYS_ADMIN or --privileged'
 
   # validate any user-supplied environment variables
   checkUserEnvNfsdPort
@@ -116,7 +126,7 @@ buildExports()
   local candidateDirs
 
   candidateDirs=$(compgen -A variable | grep -E 'NFS_EXPORT_DIR_[0-9]*')
-  checkCommandResult 'missing NFS_EXPORT_DIR_* environment variable(s)'
+  assertLastCommand 'missing NFS_EXPORT_DIR_* environment variable(s)'
 
   log 'building /etc/exports'
 
@@ -172,43 +182,42 @@ start()
   local nfsVersion=${NFS_VERSION:-4.2}
   local nfsPort=${NFSD_PORT:-2049}
 
-  while [ -z "$(pidof rpc.mountd)" ]; do
+  log 'mounting rpc_pipefs onto /var/lib/nfs/rpc_pipefs'
+  mount -t rpc_pipefs /var/lib/nfs/rpc_pipefs
+  assertLastCommand 'unable to mount rpc_pipefs'
 
-    # rpcbind isn't required for NFSv4, but if it's not running then nfsd takes over 5 minutes to start up.
-    # it's a bug in either nfs-utils on the kernel, and the code of both is over my head.
-    # so as a workaround we start rpcbind now and kill it after nfsd starts up
-    log 'starting rpcbind temporarily to allow rpc.nfsd to start quickly'
-    /sbin/rpcbind -ds
-    checkCommandResult 'rpcbind failed'
+  log 'mounting nfsd onto /proc/fs/nfsd'
+  mount -t nfsd /proc/fs/nfsd
+  assertLastCommand 'unable to mount nfsd'
+   
+  # rpcbind isn't required for NFSv4, but if it's not running then nfsd takes over 5 minutes to start up.
+  # it's a bug in either nfs-utils on the kernel, and the code of both is over my head.
+  # so as a workaround we start rpcbind now and kill it after nfsd starts up
+  log 'starting rpcbind temporarily to allow rpc.nfsd to start quickly'
+  /sbin/rpcbind -ds
+  assertLastCommand 'rpcbind failed'
 
-    log "starting rpc.nfsd on port $nfsPort with version $nfsVersion and $nfsdThreads server thread(s)"
-    /usr/sbin/rpc.nfsd --debug 8 --no-nfs-version 2 --no-nfs-version 3 --nfs-version "$nfsVersion" "$nfsdThreads"
-    checkCommandResult 'rpc.nfsd failed'
+  log "starting rpc.nfsd on port $nfsPort with version $nfsVersion and $nfsdThreads server thread(s)"
+  /usr/sbin/rpc.nfsd --debug 8 --no-nfs-version 2 --no-nfs-version 3 --nfs-version "$nfsVersion" "$nfsdThreads"
+  assertLastCommand 'rpc.nfsd failed'
 
-    log 'killing rpcbind now that rpc.nfsd is up'
-    kill -TERM "$(pidof rpcbind)"
-    checkCommandResult 'unable to kill rpcbind'
+  log 'killing rpcbind now that rpc.nfsd is up'
+  kill -TERM "$(pidof rpcbind)"
+  assertLastCommand 'unable to kill rpcbind'
 
-    log 'exporting filesystems'
-    /usr/sbin/exportfs -arv
-    checkCommandResult 'exportfs failed'
+  log 'exporting filesystems'
+  /usr/sbin/exportfs -arv
+  assertLastCommand 'exportfs failed'
 
-    log "starting rpc.mountd with version $nfsVersion"
-    /usr/sbin/rpc.mountd --debug all --no-nfs-version 2 --no-nfs-version 3 --nfs-version "$nfsVersion"
-    checkCommandResult 'rpc.mountd failed'
-
-    if [ -z "$(pidof rpc.mountd)" ]; then
-
-      log 'startup failed, sleeping for 2 seconds before retry'
-      sleep 2
-    fi
-
-  done
+  log "starting rpc.mountd with version $nfsVersion"
+  /usr/sbin/rpc.mountd --debug all --no-nfs-version 2 --no-nfs-version 3 --nfs-version "$nfsVersion"
+  assertLastCommand 'rpc.mountd failed'
 
   log "nfsd ready and waiting for client connections on port $nfsPort"
 
-  # https://stackoverflow.com/questions/2935183/bash-infinite-sleep-infinite-blocking
-  while :; do sleep 2073600; done
+  # https://stackoverflow.com/a/41655546/229920
+  # https://stackoverflow.com/a/27694965/229920
+  while :; do sleep 2073600 & wait; done
 }
 
 setupTrap
