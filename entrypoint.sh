@@ -13,7 +13,7 @@ warnIfFailed()
 
 stop()
 {
-  log 'caught SIGTERM, SIGINT, or SIGKILL'
+  log 'caught SIGTERM or SIGINT'
 
   log 'unexporting filesystems'
   /usr/sbin/exportfs -ua
@@ -33,7 +33,7 @@ stop()
 
 setupTrap()
 {
-  trap stop SIGTERM SIGINT SIGKILL
+  trap stop SIGTERM SIGINT
 }
 
 assertLastCommand()
@@ -182,10 +182,12 @@ start()
   local nfsVersion=${NFS_VERSION:-4.2}
   local nfsPort=${NFSD_PORT:-2049}
 
+  # http://wiki.linux-nfs.org/wiki/index.php/Nfsv4_configuration
   log 'mounting rpc_pipefs onto /var/lib/nfs/rpc_pipefs'
   mount -t rpc_pipefs /var/lib/nfs/rpc_pipefs
   assertLastCommand 'unable to mount rpc_pipefs'
 
+  # http://wiki.linux-nfs.org/wiki/index.php/Nfsv4_configuration
   log 'mounting nfsd onto /proc/fs/nfsd'
   mount -t nfsd /proc/fs/nfsd
   assertLastCommand 'unable to mount nfsd'
