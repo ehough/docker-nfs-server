@@ -50,15 +50,30 @@ The container requires you to supply it with your desired [NFS exports](https://
 
 Via optional environment variables, you can adjust the server settings to your needs.
 
-| name                     | default value    | description                                                                                                                                                                                             |
-|--------------------------|------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `NFS_VERSION`            | `4.2`            | Set to `3`, `4`, `4.1`, or `4.2` to fine tune the NFS protocol version. Note that any minor version will also enable any lesser minor versions. e.g. `4.2` will enable versions 4.2, 4.1, 4, **and** 3. |
-| `NFS_VERSION_DISABLE_V3` | *not set *       | Set to a non-empty value (e.g. `NFS_VERSION_DISABLE_V3=1`) to disable NFS version 3 and run a version-4-only server. This setting is not compatible with `NFS_VERSION=3`.                               |
-| `NFSD_PORT`              | `2049`           | Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.nfsd`'s listening port.                                                                                                      |
-| `NFSD_SERVER_THREADS`    | *CPU core count* | Set this to a positive integer to control how many server threads `rpc.nfsd` will use. A good minimum is one thread per CPU core, but 4 or 8 threads per core is probably better.                       |
-| `NFS_MOUNTD_PORT`        | `32767`          | *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.mountd`'s listening port.                                                                            |
-| `NFS_STATD_IN_PORT`      | `32765`          | *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s listening port.                                                                             |
-| `NFS_STATD_OUT_PORT`     | `32766`          | *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s outgoing connection port.                                                                   |
+- **`NFS_VERSION`** (default is `4.2`)
+
+  Set to `3`, `4`, `4.1`, or `4.2` to fine tune the NFS protocol version. Note that any minor version will also enable any lesser minor versions. e.g. `4.2` will enable versions 4.2, 4.1, 4, **and** 3. |
+
+- **`NFS_VERSION_DISABLE_V3`** (*not set by default*)
+
+  Set to a non-empty value (e.g. `NFS_VERSION_DISABLE_V3=1`) to disable NFS version 3 and run a version-4-only server. This setting is not compatible with `NFS_VERSION=3`.                               |
+
+- **`NFSD_PORT`** (default is `2049`)
+
+  Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.nfsd`'s listening port.                                                                                                      |
+- **`NFSD_SERVER_THREADS`** (default is *CPU core count*)
+
+  Set this to a positive integer to control how many server threads `rpc.nfsd` will use. A good minimum is one thread per CPU core, but 4 or 8 threads per core is probably better.                       |
+
+- **`NFS_MOUNTD_PORT`** (default is `32767`)
+
+  *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.mountd`'s listening port.                                                                            |
+- **`NFS_STATD_IN_PORT`** (default is `32765`)
+
+  *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s listening port.                                                                             |
+- **`NFS_STATD_OUT_PORT`** (default is `32766`)
+
+  *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s outgoing connection port.
 
 ### Mounting filesystems from a client
 
@@ -70,7 +85,7 @@ Via optional environment variables, you can adjust the server settings to your n
 
 ## Performance considerations
 
-- Running the container with `--network=host` *might* improve network performance by 10% - 20% [[1](https://jtway.co/docker-network-performance-b95bce32b4b9),[2](https://www.percona.com/blog/2016/08/03/testing-docker-multi-host-network-performance/)], though this hasn't been tested.
+- Running the container with `--network host` *might* improve network performance by 10% - 20% [[1](https://jtway.co/docker-network-performance-b95bce32b4b9),[2](https://www.percona.com/blog/2016/08/03/testing-docker-multi-host-network-performance/)], though this hasn't been tested.
 
 ## Remaining tasks
 
