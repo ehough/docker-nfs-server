@@ -1,21 +1,21 @@
-# ehough/docker-nfs4-server
+# ehough/docker-nfs-server
 
-A lightweight, robust, flexible, and containerized NFS v4 server.
+A lightweight, robust, flexible, and containerized NFS server.
 
 ## Why?
 
 This is the only containerized NFS server that offers **all** of the following features:
 
-- a version-4-only NFS server (no `rpcbind`, no port mapping, etc)
-- flexible construction of `/etc/exports` via a Docker bind mount *or* environment variables
+- supports NFS versions 3, 4, or both simultaneously
 - clean teardown of services upon `SIGTERM` or `SIGKILL` (no lingering `nfsd` processes on Docker host)
+- flexible construction of `/etc/exports` via a Docker bind mount *or* environment variables
 - lightweight image based on [Alpine Linux](https://alpinelinux.org/)
 - ability to control server parameters via environment variables
 
 ## Requirements
 
 1. The Docker **host** kernel will need both the `nfs` and `nfsd` kernel modules. Usually you can enable them both with `modprobe nfs nfsd`.
-1. The container will need to run with `CAP_SYS_ADMIN` (or `--privilged`). This is necessary as the NFS server needs to mount several filesystems inside the container to support its operation.
+1. The container will need to run with `CAP_SYS_ADMIN` (or `--privilged`). This is necessary as the server needs to mount several filesystems inside the container to support its operation.
 1. You will need to bind mount your exported filesystems into this container. e.g. `-v /some/path/on/host:/some/container/path`
 
 ## Usage
@@ -33,26 +33,6 @@ The container requires you to supply it with your desired [NFS exports](https://
          -p 2049:2049 \
          erichough/nfs4-server:latest`
          
-   A successful start of this form will look like this:
-   
-       ----> /etc/exports appears to be mounted via Docker
-       ----> checking for presence of kernel module: nfs
-       ----> checking for presence of kernel module: nfsd
-       ----> requirements look good; we should be able to run continue without issues.
-       ----> starting rpcbind temporarily to allow rpc.nfsd to start quickly
-       ----> starting rpc.nfsd on port 2049 with version 4.2 and 8 server thread(s)
-       rpc.nfsd: knfsd is currently down
-       rpc.nfsd: Writing version string to kernel: +4.2 -2 -3 +4
-       rpc.nfsd: Created AF_INET TCP socket.
-       rpc.nfsd: Created AF_INET UDP socket.
-       rpc.nfsd: Created AF_INET6 TCP socket.
-       rpc.nfsd: Created AF_INET6 UDP socket.
-       ----> killing rpcbind now that rpc.nfsd is up
-       ----> exporting filesystems
-       exporting *:/nfs
-       ----> starting rpc.mountd with version 4.2
-       ----> nfsd ready and waiting for client connections on port 2049.
-         
 1. **Supply environment variable triplets to the container to allow it to construct `/etc/exports`**.
 
     Each triplet should consist of `NFS_EXPORT_DIR_*`, `NFS_EXPORT_CLIENT_*`, and `NFS_EXPORT_OPTIONS_*`. You can add as many triplets as you'd like.
@@ -65,46 +45,20 @@ The container requires you to supply it with your desired [NFS exports](https://
          --cap-add SYS_ADMIN \
          -p 2049:2049 \
          erichough/nfs4-server:latest`
-         
-   A successful start of this form will look like this:
 
-       ----> building /etc/exports
-       ----> will export /nfs to * with options ro,no_subtree_check
-       ----> will export 1 filesystem(s)
-       ----> /etc/exports now contains the following contents:
-       /nfs *(ro,no_subtree_check,fsid=0)
-       ----> checking for presence of kernel module: nfs
-       ----> checking for presence of kernel module: nfsd
-       ----> requirements look good; we should be able to run continue without issues.
-       ----> starting rpcbind temporarily to allow rpc.nfsd to start quickly
-       ----> starting rpc.nfsd on port 2049 with version 4.2 and 8 server thread(s)
-       rpc.nfsd: knfsd is currently down
-       rpc.nfsd: Writing version string to kernel: +4.2 -2 -3 +4
-       rpc.nfsd: Created AF_INET TCP socket.
-       rpc.nfsd: Created AF_INET UDP socket.
-       rpc.nfsd: Created AF_INET6 TCP socket.
-       rpc.nfsd: Created AF_INET6 UDP socket.
-       ----> killing rpcbind now that rpc.nfsd is up
-       ----> exporting filesystems
-       exporting *:/nfs
-       ----> starting rpc.mountd with version 4.2
-       ----> nfsd ready and waiting for client connections on port 2049.
+### Configuration
 
-### Additional tweaks
+Via optional environment variables, you can adjust the server settings to your needs.
 
-Via optional environment variables, you can further adjust the server settings.
-
-- **`NFSD_PORT`** (default is `2049`)
-
-  Set this to any valid port number (`1` - `65535` inclusive) to change server's listening port.
-
-- **`NFSD_SERVER_THREADS`** (default is *CPU core count*)
-
-  Set this to a positive integer to control how many server threads rpc.nfsd will use. A good minimum is one thread per CPU core, but 4 or 8 threads per core is probably better.
-  
-- **`NFS_VERSION`** (default is `4.2`)
-
-  Set to `4`, `4.1`, or `4.2` to fine tune the NFS protocol version. Note that any minor version will also enable any lesser minor versions. e.g. `4.2` will enable `4.2`, `4.1`, *and* `4`.
+| name                     | default value    | description                                                                                                                                                                                             |
+|--------------------------|------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `NFS_VERSION`            | `4.2`            | Set to `3`, `4`, `4.1`, or `4.2` to fine tune the NFS protocol version. Note that any minor version will also enable any lesser minor versions. e.g. `4.2` will enable versions 4.2, 4.1, 4, **and** 3. |
+| `NFS_VERSION_DISABLE_V3` | *not set *       | Set to a non-empty value (e.g. `NFS_VERSION_DISABLE_V3=1`) to disable NFS version 3 and run a version-4-only server. This setting is not compatible with `NFS_VERSION=3`.                               |
+| `NFSD_PORT`              | `2049`           | Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.nfsd`'s listening port.                                                                                                      |
+| `NFSD_SERVER_THREADS`    | *CPU core count* | Set this to a positive integer to control how many server threads `rpc.nfsd` will use. A good minimum is one thread per CPU core, but 4 or 8 threads per core is probably better.                       |
+| `NFS_MOUNTD_PORT`        | `32767`          | *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.mountd`'s listening port.                                                                            |
+| `NFS_STATD_IN_PORT`      | `32765`          | *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s listening port.                                                                             |
+| `NFS_STATD_OUT_PORT`     | `32766`          | *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s outgoing connection port.                                                                   |
 
 ### Mounting filesystems from a client
 
