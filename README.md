@@ -15,7 +15,7 @@ This is the only containerized NFS server that offers **all** of the following f
 ## Requirements
 
 1. The Docker **host** kernel will need both the `nfs` and `nfsd` kernel modules. Usually you can enable them both with `modprobe nfs nfsd`.
-1. The container will need to run with `CAP_SYS_ADMIN` (or `--privilged`). This is necessary as the server needs to mount several filesystems inside the container to support its operation.
+1. The container will need to run with `CAP_SYS_ADMIN` (or `--privileged`). This is necessary as the server needs to mount several filesystems inside the container to support its operation.
 1. You will need to bind mount your exported filesystems into this container. e.g. `-v /some/path/on/host:/some/container/path`
 
 ## Usage
