@@ -24,7 +24,7 @@ This is the only containerized NFS server that offers **all** of the following f
 
 The container requires you to supply it with your desired [NFS exports](https://linux.die.net/man/5/exports) upon startup. You have **two choices** for doing this:
 
-1. **Bind mount an exports file into the container at `/etc/exports`**.
+1. **Bind mount a full exports file into the container at `/etc/exports`**.
 
        docker run \
          -v /host/path/to/exports.txt:/etc/exports:ro \
@@ -33,15 +33,15 @@ The container requires you to supply it with your desired [NFS exports](https://
          -p 2049:2049 \
          erichough/nfs4-server:latest`
          
-1. **Supply environment variable triplets to the container to allow it to construct `/etc/exports`**.
+1. **Supply each line of `/etc/exports` as an environment variable**.
 
-    Each triplet should consist of `NFS_EXPORT_DIR_*`, `NFS_EXPORT_CLIENT_*`, and `NFS_EXPORT_OPTIONS_*`. You can add as many triplets as you'd like.
+    The container will look for environment variables that start with `NFS_EXPORT_` and end with an integer. e.g. `NFS_EXPORT_0`, `NFS_EXPORT_1`, etc.
 
        docker run \
-         -e NFS_EXPORT_DIR_0=/nfs \
-         -e NFS_EXPORT_CLIENT_0=192.168.1.0/24 \
-         -e NFS_EXPORT_OPTIONS_0=rw,no_subtree_check,fsid=0 \
-         -v /host/files:/nfs \
+         -e NFS_EXPORT_0='/nfs/foo 192.168.1.0/24(ro,no_subtree_check)' \
+         -e NFS_EXPORT_1='/nfs/bar 123.123.123.123/32(rw,no_subtree_check)' \
+         -v /host/path/foo:/nfs/foo \
+         -v /host/path/bar:/nfs/bar \
          --cap-add SYS_ADMIN \
          -p 2049:2049 \
          erichough/nfs4-server:latest`

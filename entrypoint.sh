@@ -246,8 +246,8 @@ init_trap() {
   trap stop SIGTERM SIGINT
 }
 
-init_exports()
-{
+init_exports() {
+
   if mount | grep -Eq '^[^ ]+ on /etc/exports type '; then
     log '/etc/exports appears to be mounted via Docker'
     return
@@ -255,45 +255,39 @@ init_exports()
 
   local collected=0
   local exports=''
-  local candidateDirs
+  local candidateExportVariables
 
-  candidateDirs=$(compgen -A variable | grep -E 'NFS_EXPORT_DIR_[0-9]*')
-  exit_on_failure 'missing NFS_EXPORT_DIR_* environment variable(s)'
+  candidateExportVariables=$(compgen -A variable | grep -E 'NFS_EXPORT_[0-9]+' | sort)
+  exit_on_failure 'please bind mount /etc/exports or supply NFS_EXPORT_* environment variables'
 
   log 'building /etc/exports'
 
-  for dir in $candidateDirs; do
+  for exportVariable in $candidateExportVariables; do
 
-    local index=${dir##*_}
-    local net=NFS_EXPORT_CLIENT_$index
-    local opt=NFS_EXPORT_OPTIONS_$index
+    local line=${!exportVariable}
+    local lineAsArray
+    IFS=' ' read -r -a lineAsArray <<< "$line"
+    local dir="${lineAsArray[0]}"
 
-    if [[ ! -d "${!dir}" ]]; then
-      log "skipping $dir (${!dir}) since it is not a directory"
+    if [[ ! -d "$dir" ]]; then
+      log "skipping $line since $dir is not a directory"
       continue
     fi
 
-    if [[ -n ${!net} ]] && [[ -n ${!opt} ]]; then
+    log "will export $line"
 
-      log "will export ${!dir} to ${!net} with options ${!opt}"
+    if [[ $collected -gt 0 ]]; then
+      exports=$exports$'\n'
+    fi
 
-      local line="${!dir} ${!net}(${!opt})"
+    exports=$exports$line
 
-      if [[ $collected -gt 0 ]]; then
-        exports=$exports$'\n'
-      fi
+    (( collected++ ))
 
-      exports=$exports$line
-
-      (( collected++ ))
-
-     else
-        log "skipping $dir (${!dir}) as it is missing domain and/or options. be sure to set both $net and $opt."
-     fi
   done
 
   if [[ $collected -eq 0 ]]; then
-    log 'no directories to export.'
+    log 'no valid exports'
     exit 1
   fi
 
