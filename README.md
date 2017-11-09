@@ -52,25 +52,28 @@ Via optional environment variables, you can adjust the server settings to your n
 
 - **`NFS_VERSION`** (default is `4.2`)
 
-  Set to `3`, `4`, `4.1`, or `4.2` to fine tune the NFS protocol version. Note that any minor version will also enable any lesser minor versions. e.g. `4.2` will enable versions 4.2, 4.1, 4, **and** 3. |
+  Set to `3`, `4`, `4.1`, or `4.2` to fine tune the NFS protocol version. Note that any minor version will also enable any lesser minor versions. e.g. `4.2` will enable versions 4.2, 4.1, 4, **and** 3.
 
 - **`NFS_VERSION_DISABLE_V3`** (*not set by default*)
 
-  Set to a non-empty value (e.g. `NFS_VERSION_DISABLE_V3=1`) to disable NFS version 3 and run a version-4-only server. This setting is not compatible with `NFS_VERSION=3`.                               |
+  Set to a non-empty value (e.g. `NFS_VERSION_DISABLE_V3=1`) to disable NFS version 3 and run a version-4-only server. This setting is not compatible with `NFS_VERSION=3`.
 
 - **`NFSD_PORT`** (default is `2049`)
 
-  Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.nfsd`'s listening port.                                                                                                      |
+  Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.nfsd`'s listening port.
+
 - **`NFSD_SERVER_THREADS`** (default is *CPU core count*)
 
-  Set this to a positive integer to control how many server threads `rpc.nfsd` will use. A good minimum is one thread per CPU core, but 4 or 8 threads per core is probably better.                       |
+  Set this to a positive integer to control how many server threads `rpc.nfsd` will use. A good minimum is one thread per CPU core, but 4 or 8 threads per core is probably better.
 
 - **`NFS_MOUNTD_PORT`** (default is `32767`)
 
-  *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.mountd`'s listening port.                                                                            |
+  *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.mountd`'s listening port.
+
 - **`NFS_STATD_IN_PORT`** (default is `32765`)
 
-  *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s listening port.                                                                             |
+  *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s listening port.
+
 - **`NFS_STATD_OUT_PORT`** (default is `32766`)
 
   *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s outgoing connection port.
