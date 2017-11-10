@@ -36,6 +36,15 @@ readonly DEFAULT_NFS_MOUNTD_PORT=32767
 readonly DEFAULT_NFS_STATD_IN_PORT=32765
 readonly DEFAULT_NFS_STATD_OUT_PORT=32766
 
+readonly PATH_NFSD='/usr/sbin/rpc.nfsd'
+readonly PATH_EXPORTFS='/usr/sbin/exportfs'
+readonly PATH_MOUNTD='/usr/sbin/rpc.mountd'
+readonly PATH_RPCBIND='/sbin/rpcbind'
+readonly PATH_STATD='/usr/sbin/rpc.statd'
+readonly PATH_EXPORTS_FILE='/etc/exports'
+
+readonly MOUNT_PATH_NFSD='/proc/fs/nfsd'
+readonly MOUNT_PATH_RPC_PIPEFS='/var/lib/nfs/rpc_pipefs'
 
 ######################################################################################
 ### general purpose utilities
@@ -69,59 +78,64 @@ exit_on_failure() {
   fi
 }
 
+kill_process_if_running() {
+
+  local -r base=$(basename "$1")
+  local -r pid=$(pidof "$base")
+
+  if [[ -n $pid ]]; then
+    log "killing $base"
+    kill -TERM "$pid"
+    warn_on_failure "unable to kill $base"
+  else
+    log "$base was not running"
+  fi
+}
+
+
 ######################################################################################
 ### teardown
 ######################################################################################
 
-stop_process_if_running() {
+stop_mount() {
 
-  local -r pid=$(pidof "$1")
+  local -r path=$1
+  local -r type=$(basename $path)
 
-  if [[ -n $pid ]]; then
-    log "killing $1"
-    kill -TERM "$pid"
-    warn_on_failure "unable to kill $1"
+  if mount | grep -Eq ^"$type on $path\\s+"; then
+    log "un-mounting $type from $path"
+    umount -v "$path"
+    warn_on_failure "unable to un-mount $type from $path"
   else
-    log "$1 was not running"
-  fi
-}
-
-stop_unmount() {
-
-  if mount | grep -Eq ^"$1 on $2\\s+"; then
-    log "unmounting $1 from $2"
-    umount "$2"
-    warn_on_failure "unable to unmount $1 from $2"
-  else
-    log "$1 was not mounted on $2"
+    log "$type was not mounted on $path"
   fi
 }
 
 stop_nfsd() {
 
   log 'stopping nfsd'
-  /usr/sbin/rpc.nfsd 0
+  $PATH_NFSD 0
   warn_on_failure 'unable to stop nfsd. if it had started already, check Docker host for lingering [nfsd] processes'
 }
 
 stop_exportfs() {
 
-  log 'unexporting filesystems'
-  /usr/sbin/exportfs -ua
-  warn_on_failure 'unable to unexport filesystems'
+  log 'un-exporting filesystems'
+  $PATH_EXPORTFS -ua
+  warn_on_failure 'unable to un-export filesystems'
 }
 
 stop() {
 
-  logHeader 'terminating'
+  logHeader 'terminating ...'
 
   stop_nfsd
-  stop_process_if_running 'rpc.statd'
-  stop_process_if_running 'rpc.mountd'
+  kill_process_if_running "$PATH_STATD"
+  kill_process_if_running "$PATH_MOUNTD"
   stop_exportfs
-  stop_process_if_running 'rpcbind'
-  stop_unmount 'nfsd'       '/proc/fs/nfsd'
-  stop_unmount 'rpc_pipefs' '/var/lib/nfs/rpc_pipefs'
+  kill_process_if_running "$PATH_RPCBIND"
+  stop_mount "$MOUNT_PATH_NFSD"
+  stop_mount "$MOUNT_PATH_RPC_PIPEFS"
 
   logHeader 'terminated'
 
@@ -248,8 +262,8 @@ init_trap() {
 
 init_exports() {
 
-  if mount | grep -Eq '^[^ ]+ on /etc/exports type '; then
-    log '/etc/exports appears to be mounted via Docker'
+  if mount | grep -Eq "^[^ ]+ on $PATH_EXPORTS_FILE type "; then
+    log "$PATH_EXPORTS_FILE appears to be mounted via Docker"
     return
   fi
 
@@ -258,15 +272,15 @@ init_exports() {
   local candidateExportVariables
 
   candidateExportVariables=$(compgen -A variable | grep -E 'NFS_EXPORT_[0-9]+' | sort)
-  exit_on_failure 'please bind mount /etc/exports or supply NFS_EXPORT_* environment variables'
+  exit_on_failure "please bind mount $PATH_EXPORTS_FILE or supply NFS_EXPORT_* environment variables"
 
-  log 'building /etc/exports'
+  log "building $PATH_EXPORTS_FILE"
 
   for exportVariable in $candidateExportVariables; do
 
     local line=${!exportVariable}
     local lineAsArray
-    IFS=' ' read -r -a lineAsArray <<< "$line"
+    read -r -a lineAsArray <<< "$line"
     local dir="${lineAsArray[0]}"
 
     if [[ ! -d "$dir" ]]; then
@@ -293,10 +307,10 @@ init_exports() {
 
   log "will export $collected filesystem(s)"
 
-  echo "$exports" > /etc/exports
+  echo "$exports" > $PATH_EXPORTS_FILE
 
-  log '/etc/exports now contains the following contents:'
-  cat /etc/exports
+  log "$PATH_EXPORTS_FILE now contains the following contents:"
+  cat $PATH_EXPORTS_FILE
 }
 
 init_assertions() {
@@ -315,14 +329,12 @@ init_assertions() {
   assert_kernel_mod nfsd
 
   # ensure /etc/exports has at least one line
-  grep -Evq '^\s*#|^\s*$' /etc/exports
-  exit_on_failure '/etc/exports has no exports'
+  grep -Evq '^\s*#|^\s*$' $PATH_EXPORTS_FILE
+  exit_on_failure "$PATH_EXPORTS_FILE has no exports"
 
   # ensure we have CAP_SYS_ADMIN
   capsh --print | grep -Eq "^Current: = .*,?cap_sys_admin(,|$)"
   exit_on_failure 'missing CAP_SYS_ADMIN. be sure to run Docker with --cap-add SYS_ADMIN or --privileged'
-
-  log 'requirements look good'
 }
 
 
@@ -330,10 +342,10 @@ init_assertions() {
 ### boot helpers
 ######################################################################################
 
-boot_helper_do_mount() {
+boot_helper_mount() {
 
-  local -r type=$1
-  local -r path=$2
+  local -r path=$1
+  local -r type=$(basename $path)
   local -r args=('-vt' "$type" "$path")
 
   log "mounting $type onto $path"
@@ -362,28 +374,28 @@ boot_helper_get_version_flags() {
 boot_main_mounts() {
 
   # http://wiki.linux-nfs.org/wiki/index.php/Nfsv4_configuration
-  boot_helper_do_mount 'rpc_pipefs' '/var/lib/nfs/rpc_pipefs'
-  boot_helper_do_mount 'nfsd'       '/proc/fs/nfsd'
+  boot_helper_mount "$MOUNT_PATH_RPC_PIPEFS"
+  boot_helper_mount "$MOUNT_PATH_NFSD"
 }
 
 boot_main_exportfs() {
 
   log 'exporting filesystems'
-  /usr/sbin/exportfs -arv
+  $PATH_EXPORTFS -arv
   stop_on_failure 'exportfs failed'
 }
 
 boot_main_mountd() {
 
   local versionFlags
-  IFS=' ' read -r -a versionFlags <<< "$(boot_helper_get_version_flags)"
+  read -r -a versionFlags <<< "$(boot_helper_get_version_flags)"
   local -r port=$(get_reqd_mountd_port)
   local -r version=$(get_reqd_nfs_version)
   local -r args=('--debug' 'all' '--port' "$port" "${versionFlags[@]}")
 
   # yes, rpc.mountd is required even for NFS v4: https://forums.gentoo.org/viewtopic-p-7724856.html#7724856
   log "starting rpc.mountd for NFS version $version on port $port"
-  /usr/sbin/rpc.mountd "${args[@]}"
+  $PATH_MOUNTD "${args[@]}"
   stop_on_failure 'rpc.mountd failed'
 }
 
@@ -393,7 +405,7 @@ boot_main_rpcbind() {
   # it's a bug in either nfs-utils on the kernel, and the code of both is over my head.
   # so as a workaround we start rpcbind now and (in v4-only scenarios) kill it after nfsd starts up
   log 'starting rpcbind'
-  /sbin/rpcbind -ds
+  $PATH_RPCBIND -ds
   stop_on_failure 'rpcbind failed'
 }
 
@@ -408,25 +420,25 @@ boot_main_statd() {
   local -r args=('--no-notify' '--port' "$inPort" '--outgoing-port' "$outPort")
 
   log "starting statd on port $inPort (outgoing connections on port $outPort)"
-  /usr/sbin/rpc.statd "${args[@]}"
+  $PATH_STATD "${args[@]}"
   stop_on_failure 'statd failed'
 }
 
 boot_main_nfsd() {
 
   local versionFlags
-  IFS=' ' read -r -a versionFlags <<< "$(boot_helper_get_version_flags)"
+  read -r -a versionFlags <<< "$(boot_helper_get_version_flags)"
   local -r threads=$(get_reqd_nfsd_threads)
   local -r port=$(get_reqd_nfsd_port)
   local -r version=$(get_reqd_nfs_version)
   local -r args=('--debug' 8 '--port' "$port" "${versionFlags[@]}" "$threads")
 
   log "starting rpc.nfsd on port $port with version $version and $threads server thread(s)"
-  /usr/sbin/rpc.nfsd "${args[@]}"
+  $PATH_NFSD "${args[@]}"
   stop_on_failure 'rpc.nfsd failed'
 
   if [ -z "$(is_nfs3_enabled)" ]; then
-    stop_process_if_running 'rpcbind'
+    kill_process_if_running "$PATH_RPCBIND"
   fi
 }
 
@@ -438,26 +450,31 @@ boot_main_nfsd() {
 init() {
 
   logHeader 'setting up'
+
   init_trap
   init_exports
   init_assertions
+
+  log 'setup complete'
 }
 
 boot() {
 
   logHeader 'starting services'
+
   boot_main_mounts
   boot_main_rpcbind
   boot_main_exportfs
   boot_main_mountd
   boot_main_statd
   boot_main_nfsd
+
+  logHeader "ready and waiting for connections on port $(get_reqd_nfsd_port)"
 }
 
 hangout() {
 
-  logHeader "server ready and waiting for connections on port $(get_reqd_nfsd_port)"
-
+  # wait forever or until we get SIGTERM or SIGINT
   # https://stackoverflow.com/a/41655546/229920
   # https://stackoverflow.com/a/27694965/229920
   while :; do sleep 2073600 & wait; done

@@ -6,7 +6,7 @@ A lightweight, robust, flexible, and containerized NFS server.
 
 This is the only containerized NFS server that offers **all** of the following features:
 
-- supports NFS versions 3, 4, or both simultaneously
+- NFS versions 3, 4, or both simultaneously
 - clean teardown of services upon `SIGTERM` or `SIGKILL` (no lingering `nfsd` processes on Docker host)
 - flexible construction of `/etc/exports` via a Docker bind mount *or* environment variables
 - lightweight image based on [Alpine Linux](https://alpinelinux.org/)
@@ -52,7 +52,7 @@ Via optional environment variables, you can adjust the server settings to your n
 
 - **`NFS_VERSION`** (default is `4.2`)
 
-  Set to `3`, `4`, `4.1`, or `4.2` to fine tune the NFS protocol version. Note that any minor version will also enable any lesser minor versions. e.g. `4.2` will enable versions 4.2, 4.1, 4, **and** 3.
+  Set to `3`, `4`, `4.1`, or `4.2` to fine tune the NFS protocol version. Enabling any version will also enable any lesser versions. e.g. `4.2` will enable versions 4.2, 4.1, 4, **and** 3.
 
 - **`NFS_VERSION_DISABLE_V3`** (*not set by default*)
 
@@ -68,15 +68,15 @@ Via optional environment variables, you can adjust the server settings to your n
 
 - **`NFS_MOUNTD_PORT`** (default is `32767`)
 
-  *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.mountd`'s listening port.
+  *Only needed for NFS 3*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.mountd`'s listening port.
 
 - **`NFS_STATD_IN_PORT`** (default is `32765`)
 
-  *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s listening port.
+  *Only needed for NFS 3*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s listening port.
 
 - **`NFS_STATD_OUT_PORT`** (default is `32766`)
 
-  *Not needed for NFS 4*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s outgoing connection port.
+  *Only needed for NFS 3*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s outgoing connection port.
 
 ### Mounting filesystems from a client
 
