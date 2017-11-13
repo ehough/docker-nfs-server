@@ -31,7 +31,7 @@ The container requires you to supply it with your desired [NFS exports](https://
          -v /host/files:/nfs \
          --cap-add SYS_ADMIN \
          -p 2049:2049 \
-         erichough/nfs-server:latest`
+         erichough/nfs-server:latest
          
 1. **Supply each line of `/etc/exports` as an environment variable**.
 
@@ -44,7 +44,7 @@ The container requires you to supply it with your desired [NFS exports](https://
          -v /host/path/bar:/nfs/bar \
          --cap-add SYS_ADMIN \
          -p 2049:2049 \
-         erichough/nfs-server:latest`
+         erichough/nfs-server:latest
 
 ### Configuration
 
