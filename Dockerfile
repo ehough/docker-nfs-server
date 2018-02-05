@@ -1,7 +1,13 @@
-FROM alpine:latest
+# switch back to Alpine when/if https://bugs.alpinelinux.org/issues/8470 is fixed
+# FROM alpine:latest
+# RUN apk --update upgrade && apk add bash nfs-utils && rm -rf /var/cache/apk/*
 
-# install Bash and nfs-utils
-RUN apk --update upgrade && apk add bash nfs-utils && rm -rf /var/cache/apk/*
+FROM debian:stable
+
+RUN apt-get update                                                                && \
+    apt-get install -y --no-install-recommends nfs-kernel-server kmod libcap2-bin && \
+    apt-get clean                                                                 && \
+    rm -rf /var/lib/apt/lists
 
 ADD ./entrypoint.sh /usr/local/bin
 RUN chmod +x /usr/local/bin/entrypoint.sh

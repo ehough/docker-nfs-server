@@ -2,7 +2,7 @@
 #
 # ehough/docker-nfs-server: A lightweight, robust, flexible, and containerized NFS server.
 #
-# Copyright (C) 2017  Eric D. Hough
+# Copyright (C) 2017-2018  Eric D. Hough
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,27 +21,34 @@
 ### constants
 ######################################################################################
 
+readonly ENV_VAR_NFS_DISABLE_VERSION_3='NFS_DISABLE_VERSION_3'
+readonly ENV_VAR_NFS_SERVER_THREAD_COUNT='NFS_SERVER_THREAD_COUNT'
+readonly ENV_VAR_NFS_ENABLE_KERBEROS='NFS_ENABLE_KERBEROS'
+readonly ENV_VAR_NFS_PORT_MOUNTD='NFS_PORT_MOUNTD'
+readonly ENV_VAR_NFS_PORT='NFS_PORT'
+readonly ENV_VAR_NFS_PORT_STATD_IN='NFS_PORT_STATD_IN'
+readonly ENV_VAR_NFS_PORT_STATD_OUT='NFS_PORT_STATD_OUT'
 readonly ENV_VAR_NFS_VERSION='NFS_VERSION'
-readonly ENV_VAR_NFS_VERSION_DISABLE_V3='NFS_VERSION_DISABLE_V3'
-readonly ENV_VAR_NFSD_SERVER_THREADS='NFSD_SERVER_THREADS'
-readonly ENV_VAR_NFSD_PORT='NFSD_PORT'
-readonly ENV_VAR_NFS_MOUNTD_PORT='NFS_MOUNTD_PORT'
-readonly ENV_VAR_NFS_STATD_IN_PORT='NFS_STATD_IN_PORT'
-readonly ENV_VAR_NFS_STATD_OUT_PORT='NFS_STATD_OUT_PORT'
 
+readonly DEFAULT_NFS_SERVER_THREAD_COUNT="$(grep -Ec ^processor /proc/cpuinfo)"
+readonly DEFAULT_NFS_PORT=2049
+readonly DEFAULT_NFS_PORT_MOUNTD=32767
+readonly DEFAULT_NFS_PORT_STATD_IN=32765
+readonly DEFAULT_NFS_PORT_STATD_OUT=32766
 readonly DEFAULT_NFS_VERSION='4.2'
-readonly DEFAULT_NFSD_SERVER_THREADS="$(grep -Ec ^processor /proc/cpuinfo)"
-readonly DEFAULT_NFSD_PORT=2049
-readonly DEFAULT_NFS_MOUNTD_PORT=32767
-readonly DEFAULT_NFS_STATD_IN_PORT=32765
-readonly DEFAULT_NFS_STATD_OUT_PORT=32766
 
-readonly PATH_NFSD='/usr/sbin/rpc.nfsd'
-readonly PATH_EXPORTFS='/usr/sbin/exportfs'
-readonly PATH_MOUNTD='/usr/sbin/rpc.mountd'
-readonly PATH_RPCBIND='/sbin/rpcbind'
-readonly PATH_STATD='/usr/sbin/rpc.statd'
-readonly PATH_EXPORTS_FILE='/etc/exports'
+readonly PATH_BIN_EXPORTFS='/usr/sbin/exportfs'
+readonly PATH_BIN_IDMAPD='/usr/sbin/rpc.idmapd'
+readonly PATH_BIN_MOUNTD='/usr/sbin/rpc.mountd'
+readonly PATH_BIN_NFSD='/usr/sbin/rpc.nfsd'
+readonly PATH_BIN_RPCBIND='/sbin/rpcbind'
+readonly PATH_BIN_RPC_SVCGSSD='/usr/sbin/rpc.svcgssd'
+readonly PATH_BIN_STATD='/sbin/rpc.statd'
+
+readonly PATH_FILE_ETC_EXPORTS='/etc/exports'
+readonly PATH_FILE_ETC_IDMAPD_CONF='/etc/idmapd.conf'
+readonly PATH_FILE_ETC_KRB5_CONF='/etc/krb5.conf'
+readonly PATH_FILE_ETC_KRB5_KEYTAB='/etc/krb5.keytab'
 
 readonly MOUNT_PATH_NFSD='/proc/fs/nfsd'
 readonly MOUNT_PATH_RPC_PIPEFS='/var/lib/nfs/rpc_pipefs'
@@ -100,7 +107,7 @@ kill_process_if_running() {
 stop_mount() {
 
   local -r path=$1
-  local -r type=$(basename $path)
+  local -r type=$(basename "$path")
 
   if mount | grep -Eq ^"$type on $path\\s+"; then
     log "un-mounting $type from $path"
@@ -114,14 +121,14 @@ stop_mount() {
 stop_nfsd() {
 
   log 'stopping nfsd'
-  $PATH_NFSD 0
+  $PATH_BIN_NFSD 0
   warn_on_failure 'unable to stop nfsd. if it had started already, check Docker host for lingering [nfsd] processes'
 }
 
 stop_exportfs() {
 
   log 'un-exporting filesystems'
-  $PATH_EXPORTFS -ua
+  $PATH_BIN_EXPORTFS -ua
   warn_on_failure 'unable to un-export filesystems'
 }
 
@@ -129,11 +136,13 @@ stop() {
 
   logHeader 'terminating ...'
 
+  kill_process_if_running "$PATH_BIN_RPC_SVCGSSD"
   stop_nfsd
-  kill_process_if_running "$PATH_STATD"
-  kill_process_if_running "$PATH_MOUNTD"
+  kill_process_if_running "$PATH_BIN_IDMAPD"
+  kill_process_if_running "$PATH_BIN_STATD"
+  kill_process_if_running "$PATH_BIN_MOUNTD"
   stop_exportfs
-  kill_process_if_running "$PATH_RPCBIND"
+  kill_process_if_running "$PATH_BIN_RPCBIND"
   stop_mount "$MOUNT_PATH_NFSD"
   stop_mount "$MOUNT_PATH_RPC_PIPEFS"
 
@@ -162,32 +171,39 @@ get_reqd_nfs_version() {
 
 get_reqd_nfsd_threads() {
 
-   echo "${!ENV_VAR_NFSD_SERVER_THREADS:-$DEFAULT_NFSD_SERVER_THREADS}"
+   echo "${!ENV_VAR_NFS_SERVER_THREAD_COUNT:-$DEFAULT_NFS_SERVER_THREAD_COUNT}"
 }
 
 get_reqd_mountd_port() {
 
-  echo "${!ENV_VAR_NFS_MOUNTD_PORT:-$DEFAULT_NFS_MOUNTD_PORT}"
+  echo "${!ENV_VAR_NFS_PORT_MOUNTD:-$DEFAULT_NFS_PORT_MOUNTD}"
 }
 
 get_reqd_nfsd_port() {
 
-  echo "${!ENV_VAR_NFSD_PORT:-$DEFAULT_NFSD_PORT}"
+  echo "${!ENV_VAR_NFS_PORT:-$DEFAULT_NFS_PORT}"
 }
 
 get_reqd_statd_in_port() {
 
-  echo "${!ENV_VAR_NFS_STATD_IN_PORT:-$DEFAULT_NFS_STATD_IN_PORT}"
+  echo "${!ENV_VAR_NFS_PORT_STATD_IN:-$DEFAULT_NFS_PORT_STATD_IN}"
 }
 
 get_reqd_statd_out_port() {
 
-  echo "${!ENV_VAR_NFS_STATD_OUT_PORT:-$DEFAULT_NFS_STATD_OUT_PORT}"
+  echo "${!ENV_VAR_NFS_PORT_STATD_OUT:-$DEFAULT_NFS_PORT_STATD_OUT}"
+}
+
+is_kerberos_enabled() {
+
+  if [[ -n "${!ENV_VAR_NFS_ENABLE_KERBEROS}" ]]; then
+    echo 1
+  fi
 }
 
 is_nfs3_enabled() {
 
-  if [[ -z "${!ENV_VAR_NFS_VERSION_DISABLE_V3}" ]]; then
+  if [[ -z "${!ENV_VAR_NFS_DISABLE_VERSION_3}" ]]; then
     echo 1
   fi
 }
@@ -245,9 +261,33 @@ assert_nfsd_threads() {
   local -r requested=$(get_reqd_nfsd_threads)
 
   if [[ "$requested" -lt 1 ]]; then
-    log "Please set $ENV_VAR_NFSD_SERVER_THREADS to a positive value"
+    log "Please set $ENV_VAR_NFS_SERVER_THREAD_COUNT to a positive value"
     exit 1
   fi
+}
+
+assert_kerberos_requirements() {
+
+  if [[ -z "$(is_kerberos_enabled)" ]]; then
+    return
+  fi
+
+  if [[ ! -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
+    log "Please provide $PATH_FILE_ETC_IDMAPD_CONF to the container"
+    exit 1
+  fi
+
+  if [[ ! -f "$PATH_FILE_ETC_KRB5_KEYTAB" ]]; then
+    log "Please provide $PATH_FILE_ETC_KRB5_KEYTAB to the container"
+    exit 1
+  fi
+
+  if [[ ! -f "$PATH_FILE_ETC_KRB5_CONF" ]]; then
+    log "Please provide $PATH_FILE_ETC_KRB5_CONF to the container"
+    exit 1
+  fi
+
+  assert_kernel_mod rpcsec_gss_krb5
 }
 
 
@@ -262,8 +302,8 @@ init_trap() {
 
 init_exports() {
 
-  if mount | grep -Eq "^[^ ]+ on $PATH_EXPORTS_FILE type "; then
-    log "$PATH_EXPORTS_FILE appears to be mounted via Docker"
+  if mount | grep -Eq "^[^ ]+ on $PATH_FILE_ETC_EXPORTS type "; then
+    log "$PATH_FILE_ETC_EXPORTS already exists in the container"
     return
   fi
 
@@ -272,9 +312,9 @@ init_exports() {
   local candidateExportVariables
 
   candidateExportVariables=$(compgen -A variable | grep -E 'NFS_EXPORT_[0-9]+' | sort)
-  exit_on_failure "please bind mount $PATH_EXPORTS_FILE or supply NFS_EXPORT_* environment variables"
+  exit_on_failure "please provide $PATH_FILE_ETC_EXPORTS or set NFS_EXPORT_* environment variables"
 
-  log "building $PATH_EXPORTS_FILE"
+  log "building $PATH_FILE_ETC_EXPORTS"
 
   for exportVariable in $candidateExportVariables; do
 
@@ -307,19 +347,16 @@ init_exports() {
 
   log "will export $collected filesystem(s)"
 
-  echo "$exports" > $PATH_EXPORTS_FILE
-
-  log "$PATH_EXPORTS_FILE now contains the following contents:"
-  cat $PATH_EXPORTS_FILE
+  echo "$exports" > $PATH_FILE_ETC_EXPORTS
 }
 
 init_assertions() {
 
   # validate any user-supplied environment variables
-  assert_port "$ENV_VAR_NFSD_PORT"
-  assert_port "$ENV_VAR_NFS_MOUNTD_PORT"
-  assert_port "$ENV_VAR_NFS_STATD_IN_PORT"
-  assert_port "$ENV_VAR_NFS_STATD_OUT_PORT"
+  assert_port "$ENV_VAR_NFS_PORT"
+  assert_port "$ENV_VAR_NFS_PORT_MOUNTD"
+  assert_port "$ENV_VAR_NFS_PORT_STATD_IN"
+  assert_port "$ENV_VAR_NFS_PORT_STATD_OUT"
   assert_nfs_version
   assert_disabled_nfs3
   assert_nfsd_threads
@@ -329,12 +366,15 @@ init_assertions() {
   assert_kernel_mod nfsd
 
   # ensure /etc/exports has at least one line
-  grep -Evq '^\s*#|^\s*$' $PATH_EXPORTS_FILE
-  exit_on_failure "$PATH_EXPORTS_FILE has no exports"
+  grep -Evq '^\s*#|^\s*$' $PATH_FILE_ETC_EXPORTS
+  exit_on_failure "$PATH_FILE_ETC_EXPORTS has no exports"
 
   # ensure we have CAP_SYS_ADMIN
   capsh --print | grep -Eq "^Current: = .*,?cap_sys_admin(,|$)"
   exit_on_failure 'missing CAP_SYS_ADMIN. be sure to run Docker with --cap-add SYS_ADMIN or --privileged'
+
+  # perform Kerberos assertions
+  assert_kerberos_requirements
 }
 
 
@@ -345,7 +385,7 @@ init_assertions() {
 boot_helper_mount() {
 
   local -r path=$1
-  local -r type=$(basename $path)
+  local -r type=$(basename "$path")
   local -r args=('-vt' "$type" "$path")
 
   log "mounting $type onto $path"
@@ -381,7 +421,7 @@ boot_main_mounts() {
 boot_main_exportfs() {
 
   log 'exporting filesystems'
-  $PATH_EXPORTFS -arv
+  $PATH_BIN_EXPORTFS -arv
   stop_on_failure 'exportfs failed'
 }
 
@@ -395,7 +435,7 @@ boot_main_mountd() {
 
   # yes, rpc.mountd is required even for NFS v4: https://forums.gentoo.org/viewtopic-p-7724856.html#7724856
   log "starting rpc.mountd for NFS version $version on port $port"
-  $PATH_MOUNTD "${args[@]}"
+  $PATH_BIN_MOUNTD "${args[@]}"
   stop_on_failure 'rpc.mountd failed'
 }
 
@@ -405,8 +445,17 @@ boot_main_rpcbind() {
   # it's a bug in either nfs-utils on the kernel, and the code of both is over my head.
   # so as a workaround we start rpcbind now and (in v4-only scenarios) kill it after nfsd starts up
   log 'starting rpcbind'
-  $PATH_RPCBIND -ds
+  $PATH_BIN_RPCBIND -ds
   stop_on_failure 'rpcbind failed'
+}
+
+boot_main_idmapd() {
+
+  if [[ -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
+    log 'starting idmapd'
+    $PATH_BIN_IDMAPD -v -S
+    stop_on_failure 'idmapd failed'
+  fi
 }
 
 boot_main_statd() {
@@ -420,7 +469,7 @@ boot_main_statd() {
   local -r args=('--no-notify' '--port' "$inPort" '--outgoing-port' "$outPort")
 
   log "starting statd on port $inPort (outgoing connections on port $outPort)"
-  $PATH_STATD "${args[@]}"
+  $PATH_BIN_STATD "${args[@]}"
   stop_on_failure 'statd failed'
 }
 
@@ -434,14 +483,31 @@ boot_main_nfsd() {
   local -r args=('--debug' 8 '--port' "$port" "${versionFlags[@]}" "$threads")
 
   log "starting rpc.nfsd on port $port with version $version and $threads server thread(s)"
-  $PATH_NFSD "${args[@]}"
+  $PATH_BIN_NFSD "${args[@]}"
   stop_on_failure 'rpc.nfsd failed'
 
   if [ -z "$(is_nfs3_enabled)" ]; then
-    kill_process_if_running "$PATH_RPCBIND"
+    kill_process_if_running "$PATH_BIN_RPCBIND"
   fi
 }
 
+boot_main_svcgssd() {
+
+  if [[ -z "$(is_kerberos_enabled)" ]]; then
+    return
+  fi
+
+  log 'starting rpc.svcgssd'
+  $PATH_BIN_RPC_SVCGSSD -f &
+  stop_on_failure 'rpc.svcgssd failed'
+}
+
+boot_main_print_ready_message() {
+
+  logHeader "ready and waiting for connections on port $(get_reqd_nfsd_port)"
+  log 'list of exports:'
+  cat $PATH_FILE_ETC_EXPORTS
+}
 
 ######################################################################################
 ### main routines
@@ -467,9 +533,10 @@ boot() {
   boot_main_exportfs
   boot_main_mountd
   boot_main_statd
+  boot_main_idmapd
   boot_main_nfsd
-
-  logHeader "ready and waiting for connections on port $(get_reqd_nfsd_port)"
+  boot_main_svcgssd
+  boot_main_print_ready_message
 }
 
 hangout() {
