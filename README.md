@@ -1,4 +1,4 @@
-# ehough/docker-nfs-server
+# erichough/nfs-server
 
 A lightweight, robust, flexible, and containerized NFS server.
 
