@@ -396,11 +396,16 @@ boot_helper_mount() {
 boot_helper_get_version_flags() {
 
   local versionFlags
+  local -r requestedVersion="$(get_reqd_nfs_version)"
 
-  versionFlags=('--nfs-version' "$(get_reqd_nfs_version)" '--no-nfs-version' 2)
+  versionFlags=('--nfs-version' "$requestedVersion" '--no-nfs-version' 2)
 
   if [[ -z "$(is_nfs3_enabled)" ]]; then
     versionFlags+=('--no-nfs-version' 3)
+  fi
+
+  if [[ "$requestedVersion" == '3' ]]; then
+    versionFlags+=('--no-nfs-version' 4)
   fi
 
   echo "${versionFlags[@]}"
