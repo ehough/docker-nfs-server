@@ -456,7 +456,7 @@ boot_main_rpcbind() {
 
 boot_main_idmapd() {
 
-  if [[ -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
+  if [[ "$(get_reqd_nfs_version)" != '3' && -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
     log 'starting idmapd'
     $PATH_BIN_IDMAPD -v -S
     stop_on_failure 'idmapd failed'
