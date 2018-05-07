@@ -4,10 +4,13 @@
 
 FROM debian:stable
 
+# kmod is required for lsmod
+# libcap2-bin is required for checking capabilities
 RUN apt-get update                                                                && \
     apt-get install -y --no-install-recommends nfs-kernel-server kmod libcap2-bin && \
     apt-get clean                                                                 && \
-    rm -rf /var/lib/apt/lists
+    rm -rf /var/lib/apt/lists                                                     && \
+    rm /etc/idmapd.conf # remove the default idmapd.conf
 
 ADD ./entrypoint.sh /usr/local/bin
 RUN chmod +x /usr/local/bin/entrypoint.sh
