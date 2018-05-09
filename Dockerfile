@@ -6,6 +6,8 @@ ARG BUILD_FROM=debian:stretch-slim
 
 FROM $BUILD_FROM
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 # kmod is required for lsmod
 # libcap2-bin is required for checking capabilities
 RUN apt-get update                                                                && \
