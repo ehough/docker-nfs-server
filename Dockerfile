@@ -2,7 +2,9 @@
 # FROM alpine:latest
 # RUN apk --update upgrade && apk add bash nfs-utils && rm -rf /var/cache/apk/*
 
-FROM debian:stable
+ARG BUILD_FROM=debian:stretch-slim
+
+FROM $BUILD_FROM
 
 # kmod is required for lsmod
 # libcap2-bin is required for checking capabilities
