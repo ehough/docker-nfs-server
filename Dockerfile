@@ -2,7 +2,12 @@
 # FROM alpine:latest
 # RUN apk --update upgrade && apk add bash nfs-utils && rm -rf /var/cache/apk/*
 
-FROM debian:stable
+ARG BUILD_FROM=debian:stretch-slim
+
+FROM $BUILD_FROM
+
+# https://github.com/ehough/docker-nfs-server/pull/3#issuecomment-387880692
+ARG DEBIAN_FRONTEND=noninteractive
 
 # kmod is required for lsmod
 # libcap2-bin is required for checking capabilities
