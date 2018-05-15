@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+* Base image is now configurable via `BUILD_FROM` build argument. e.g. `docker build --build-arg BUILD_FROM=ubuntu erichough/nfs-server` ([#3](https://github.com/ehough/docker-nfs-server/pull/3))
+
+### Changed
+
+* Base image is now `debian:stretch-slim` (was `debian:stable`)
+
 ### Fixed
 
 * `rpc.idmapd` was started even when NFS version 4 was not in use
