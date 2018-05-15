@@ -92,7 +92,7 @@ Here's an example:
        docker run                                            \
          -v /host/path/to/exports.txt:/etc/exports:ro        \
          -v /host/files:/nfs                                 \
-         -e NFS_ENABLE_KERBEROS=1						     \
+         -e NFS_ENABLE_KERBEROS=1                            \
          --hostname my-nfs-server.com                        \
          -v /host/path/to/server.keytab:/etc/krb5.keytab:ro  \
          -v /host/path/to/server.krb5conf:/etc/krb5.conf:ro  \
