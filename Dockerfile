@@ -1,10 +1,10 @@
 # Alpine can only be used if/when this bug is fixed: https://bugs.alpinelinux.org/issues/8470
 ARG BUILD_FROM=debian:stretch-slim
 
+FROM $BUILD_FROM
+
 # https://github.com/ehough/docker-nfs-server/pull/3#issuecomment-387880692
 ARG DEBIAN_FRONTEND=noninteractive
-
-FROM $BUILD_FROM
 
 # kmod is needed for lsmod, and libcap2-bin is needed for confirming Linux capabilities
 RUN apt-get update                                                                && \
