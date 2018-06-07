@@ -53,6 +53,7 @@ readonly PATH_FILE_ETC_KRB5_KEYTAB='/etc/krb5.keytab'
 readonly MOUNT_PATH_NFSD='/proc/fs/nfsd'
 readonly MOUNT_PATH_RPC_PIPEFS='/var/lib/nfs/rpc_pipefs'
 
+
 ######################################################################################
 ### general purpose utilities
 ######################################################################################
@@ -70,8 +71,15 @@ logHeader() {
   echo '=================================================================='
 }
 
+bail() {
+
+  log "ERROR: $1"
+  exit 1
+}
+
 warn_on_failure() {
 
+  # shellcheck disable=SC2181
   if [[ $? -ne 0 ]]; then
     log "WARNING: $1"
   fi
@@ -79,9 +87,9 @@ warn_on_failure() {
 
 exit_on_failure() {
 
+  # shellcheck disable=SC2181
   if [[ $? -ne 0 ]]; then
-    log "$1"
-    exit 1
+    bail "$1"
   fi
 }
 
@@ -153,6 +161,7 @@ stop() {
 
 stop_on_failure() {
 
+  # shellcheck disable=SC2181
   if [[ $? -ne 0 ]]; then
     log "$1"
     stop
@@ -220,6 +229,13 @@ is_nfs4_enabled() {
 ### runtime configuration assertions
 ######################################################################################
 
+assert_file_provided() {
+
+  if [[ ! -f "$1" ]]; then
+    bail "please provide $1 to the container"
+  fi
+}
+
 assert_kernel_mod() {
 
   local -r moduleName=$1
@@ -237,8 +253,7 @@ assert_port() {
   local -r value=${!envName}
 
   if [[ -n "$value" && ( "$value" -lt 1 || "$value" -gt 65535 ) ]]; then
-    log "Please set $1 to a value between 1 and 65535 inclusive"
-    exit 1
+    bail "please set $1 to a value between 1 and 65535 inclusive"
   fi
 }
 
@@ -251,8 +266,7 @@ assert_nfs_version() {
 assert_disabled_nfs3() {
 
   if [[ -z "$(is_nfs3_enabled)" && "$(get_reqd_nfs_version)" == '3' ]]; then
-    log 'you cannot simultaneously enable and disable NFS version 3'
-    exit 1
+    bail 'you cannot simultaneously enable and disable NFS version 3'
   fi
 }
 
@@ -261,33 +275,20 @@ assert_nfsd_threads() {
   local -r requested=$(get_reqd_nfsd_threads)
 
   if [[ "$requested" -lt 1 ]]; then
-    log "Please set $ENV_VAR_NFS_SERVER_THREAD_COUNT to a positive value"
-    exit 1
+    bail "please set $ENV_VAR_NFS_SERVER_THREAD_COUNT to a positive value"
   fi
 }
 
 assert_kerberos_requirements() {
 
-  if [[ -z "$(is_kerberos_enabled)" ]]; then
-    return
-  fi
+  if [[ -n "$(is_kerberos_enabled)" ]]; then
 
-  if [[ ! -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
-    log "Please provide $PATH_FILE_ETC_IDMAPD_CONF to the container"
-    exit 1
-  fi
+    assert_file_provided "$PATH_FILE_ETC_IDMAPD_CONF"
+    assert_file_provided "$PATH_FILE_ETC_KRB5_KEYTAB"
+    assert_file_provided "$PATH_FILE_ETC_KRB5_CONF"
 
-  if [[ ! -f "$PATH_FILE_ETC_KRB5_KEYTAB" ]]; then
-    log "Please provide $PATH_FILE_ETC_KRB5_KEYTAB to the container"
-    exit 1
+    assert_kernel_mod rpcsec_gss_krb5
   fi
-
-  if [[ ! -f "$PATH_FILE_ETC_KRB5_CONF" ]]; then
-    log "Please provide $PATH_FILE_ETC_KRB5_CONF to the container"
-    exit 1
-  fi
-
-  assert_kernel_mod rpcsec_gss_krb5
 }
 
 
@@ -341,8 +342,7 @@ init_exports() {
   done
 
   if [[ $collected -eq 0 ]]; then
-    log 'no valid exports'
-    exit 1
+    bail 'no valid exports'
   fi
 
   log "will export $collected filesystem(s)"
@@ -513,6 +513,7 @@ boot_main_print_ready_message() {
   log 'list of exports:'
   cat $PATH_FILE_ETC_EXPORTS
 }
+
 
 ######################################################################################
 ### main routines
