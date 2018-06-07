@@ -226,7 +226,7 @@ assert_kernel_mod() {
 
   log "checking for presence of kernel module: $moduleName"
 
-  lsmod | grep -Eq "^$moduleName\\s+"
+  lsmod | grep -Eq "^$moduleName\\s+" || [ -d "/sys/module/$moduleName" ]
 
   exit_on_failure "$moduleName module is not loaded on the Docker host's kernel (try: modprobe $moduleName)"
 }
