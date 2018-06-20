@@ -41,9 +41,9 @@ You will need to provide your desired [NFS exports](https://linux.die.net/man/5/
          -v /host/files:/nfs                           \
          --cap-add SYS_ADMIN                           \
          -p 2049:2049                                  \
-         erichough/nfs-server:latest
+         erichough/nfs-server
          
-1. **Provide each line of `/etc/exports` as an environment variable**.
+1. **Provide each line of `/etc/exports` as an environment variable**
 
     The container will look for environment variables that start with `NFS_EXPORT_` and end with an integer. e.g. `NFS_EXPORT_0`, `NFS_EXPORT_1`, etc.
 
@@ -54,16 +54,16 @@ You will need to provide your desired [NFS exports](https://linux.die.net/man/5/
          -v /host/path/bar:/nfs/bar                                          \
          --cap-add SYS_ADMIN                                                 \
          -p 2049:2049                                                        \
-         erichough/nfs-server:latest
+         erichough/nfs-server
 
 1. **Bake `/etc/exports` into a custom image**
 
     e.g. in a `Dockerfile`:
 
-       FROM ehough/nfs-server:latest
+       FROM ehough/nfs-server
        ADD /host/path/to/exports.txt /etc/exports
 
-### (Optional) User ID Mapping
+### (Optional) NFSv4 User ID Mapping
 
 If you'd like to run [`idmapd`](http://man7.org/linux/man-pages/man8/idmapd.8.html) to map between NFSv4 IDs (e.g. `foo@bar.com`) and local users, simply provide [`idmapd.conf`](https://linux.die.net/man/5/idmapd.conf) and `/etc/passwd` to the container. This step is required for Kerberos.
 
@@ -74,7 +74,7 @@ If you'd like to run [`idmapd`](http://man7.org/linux/man-pages/man8/idmapd.8.ht
          -v /etc/passwd:/etc/passwd:ro                     \
          --cap-add SYS_ADMIN                               \
          -p 2049:2049                                      \
-         erichough/nfs-server:latest
+         erichough/nfs-server
          
 ### (Optional) Kerberos
 
@@ -85,7 +85,7 @@ You can enable Kerberos security by performing the following additional actions:
 1. provide `/etc/krb5.keytab` which contains a principal of the form `nfs/<hostname>`, where `<hostname>` is the hostname you supplied in the previous step.
 1. provide [`/etc/krb5.conf`](https://web.mit.edu/kerberos/krb5-1.12/doc/admin/conf_files/krb5_conf.html)
 1. provide [`/etc/idmapd.conf`](https://linux.die.net/man/5/idmapd.conf)
-1. provide `/etc/passwd` that contains your NFS client users
+1. provide `/etc/passwd` containing your NFS client users
 
 Here's an example:
 
@@ -100,7 +100,7 @@ Here's an example:
          -v /etc/passwd:/etc/passwd:ro                       \
          --cap-add SYS_ADMIN                                 \
          -p 2049:2049                                        \
-         erichough/nfs-server:latest
+         erichough/nfs-server
 
 ### Environment Variables
 
@@ -136,7 +136,19 @@ The following optional environment variables allow you to adjust the server sett
   
 - **`NFS_ENABLE_KERBEROS`** (*not set by default*)
 
-  Set to a non-empty value (e.g. `NFS_ENABLE_KERBEROS=1`) to enable Kerberos on this server. See "Kerberos" section above for further details.
+  Set to a non-empty value (e.g. `NFS_ENABLE_KERBEROS=1`) to enable Kerberos on this server. See the [Kerberos](#kerberos) section above for further details.
+
+### Which ports need to be exposed?
+
+* NFSv4
+  * `2049`
+* NFSv3
+  * `111` & `111/udp`
+  * `2049` & `2049/udp`
+  * `32765` & `32765/udp`
+  * `32767` & `32767/udp`
+  
+These ports can be exposed using the usual [Docker syntax](https://docs.docker.com/engine/reference/run/#expose-incoming-ports) (e.g. `-p 2049:2049`), and most can be customized via [environment variables](#environment-variables).
 
 ### Mounting filesystems from a client
 
@@ -157,7 +169,7 @@ The following optional environment variables allow you to adjust the server sett
 
 ## Acknowledgements
 
-This work was based heavily on prior projects:
+This work was based on prior projects:
 
 - [f-u-z-z-l-e/docker-nfs-server](https://github.com/f-u-z-z-l-e/docker-nfs-server)
 - [sjiveson/nfs-server-alpine](https://github.com/sjiveson/nfs-server-alpine)
