@@ -11,9 +11,9 @@ This is the only containerized NFS server that offers **all** of the following f
 - flexible construction of `/etc/exports`
 - extensive server configuration via environment variables
 - *optional* bonus features
-  - [Kerberos security](docs/feature/kerberos.md)
-  - [NFSv4 user ID mapping](docs/feature/nfs4-user-id-mapping.md) via [`idmapd`](http://man7.org/linux/man-pages/man8/idmapd.8.html)
-  - [AppArmor](docs/feature/apparmor.md) compatibility
+  - [Kerberos security](doc/feature/kerberos.md)
+  - [NFSv4 user ID mapping](doc/feature/nfs4-user-id-mapping.md) via [`idmapd`](http://man7.org/linux/man-pages/man8/idmapd.8.html)
+  - [AppArmor](doc/feature/apparmor.md) compatibility
 
 ## Table of Contents
 
@@ -22,13 +22,13 @@ This is the only containerized NFS server that offers **all** of the following f
   * [Starting the server](#starting-the-server)
   * [Mounting filesystems from a client](#mounting-filesystems-from-a-client)
 * Optional features
-  * [Kerberos security](docs/feature/kerberos.md)
-  * [NFSv4 user ID mapping](docs/feature/nfsv4-user-id-mapping.md)
-  * [AppArmor integration](docs/feature/apparmor.md)
+  * [Kerberos security](doc/feature/kerberos.md)
+  * [NFSv4 user ID mapping](doc/feature/nfsv4-user-id-mapping.md)
+  * [AppArmor integration](doc/feature/apparmor.md)
 * Advanced
-  * [custom server ports](docs/advanced/ports.md)
-  * [custom NFS versions offered](docs/advanced/nfs-versions.md)
-  * [performance tuning](docs/advanced/performance-tuning.md)
+  * [custom server ports](doc/advanced/ports.md)
+  * [custom NFS versions offered](doc/advanced/nfs-versions.md)
+  * [performance tuning](doc/advanced/performance-tuning.md)
 * [Help!](#help!)
 * [Remaining tasks](#remaining-tasks)
 * [Acknowledgements](#acknowledgements)
@@ -111,7 +111,7 @@ Let's break that command down into its individual pieces to see what's required 
 
 1. **Expose the server ports**
 
-   You'll need to open up at least one server port for your client connections. The ports listed in the examples below are the defaults used by this image and most can be [customized](docs/ports.md).
+   You'll need to open up at least one server port for your client connections. The ports listed in the examples below are the defaults used by this image and most can be [customized](doc/ports.md).
 
    * If your clients connect via **NFSv4 only**, you can get by with just TCP port `2049`:
      
@@ -135,15 +135,15 @@ If you pay close attention to each of the items in this section, the server shou
 
 ## Optional Features
 
-  * [Kerberos security](docs/feature/kerberos.md)
-  * [NFSv4 user ID mapping](docs/feature/nfsv4-user-id-mapping.md)
-  * [AppArmor integration](docs/feature/apparmor.md)
+  * [Kerberos security](doc/feature/kerberos.md)
+  * [NFSv4 user ID mapping](doc/feature/nfsv4-user-id-mapping.md)
+  * [AppArmor integration](doc/feature/apparmor.md)
   
 ## Advanced
 
-  * [customizing which ports are used](docs/advanced/ports.md)
-  * [customizing NFS versions offered](docs/advanced/nfs-versions.md)
-  * [performance tuning](docs/advanced/performance-tuning.md)
+  * [customizing which ports are used](doc/advanced/ports.md)
+  * [customizing NFS versions offered](doc/advanced/nfs-versions.md)
+  * [performance tuning](doc/advanced/performance-tuning.md)
 
 ## Help!
 
