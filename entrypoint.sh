@@ -447,7 +447,7 @@ boot_main_mountd() {
 boot_main_rpcbind() {
 
   # rpcbind isn't required for NFSv4, but if it's not running then nfsd takes over 5 minutes to start up.
-  # it's a bug in either nfs-utils on the kernel, and the code of both is over my head.
+  # it's a bug in either nfs-utils or the kernel, and the code of both is over my head.
   # so as a workaround we start rpcbind now and (in v4-only scenarios) kill it after nfsd starts up
   log 'starting rpcbind'
   $PATH_BIN_RPCBIND -ds

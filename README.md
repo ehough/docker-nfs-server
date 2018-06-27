@@ -7,11 +7,31 @@ A lightweight, robust, flexible, and containerized NFS server.
 This is the only containerized NFS server that offers **all** of the following features:
 
 - NFS versions 3, 4, or both simultaneously
-- optional Kerberos security
-- optional name/ID mapping via [`idmapd`](http://man7.org/linux/man-pages/man8/idmapd.8.html)
-- clean teardown of services upon `SIGTERM` or `SIGKILL` (no lingering `nfsd` processes on Docker host)
-- flexible construction of `/etc/exports` via a Docker bind mount *or* environment variables
+- clean teardown of services upon termination (no lingering `nfsd` processes on Docker host)
+- flexible construction of `/etc/exports`
 - extensive server configuration via environment variables
+- *optional* bonus features
+  - [Kerberos security](docs/feature/kerberos.md)
+  - [NFSv4 user ID mapping](docs/feature/nfs4-user-id-mapping.md) via [`idmapd`](http://man7.org/linux/man-pages/man8/idmapd.8.html)
+  - [AppArmor](docs/feature/apparmor.md) compatibility
+
+## Table of Contents
+
+* [Requirements](#requirements)
+* Usage
+  * [Starting the server](#starting-the-server)
+  * [Mounting filesystems from a client](#mounting-filesystems-from-a-client)
+* Optional features
+  * [Kerberos security](docs/feature/kerberos.md)
+  * [NFSv4 user ID mapping](docs/feature/nfsv4-user-id-mapping.md)
+  * [AppArmor integration](docs/feature/apparmor.md)
+* Advanced
+  * [custom server ports](docs/advanced/ports.md)
+  * [custom NFS versions offered](docs/advanced/nfs-versions.md)
+  * [performance tuning](docs/advanced/performance-tuning.md)
+* [Help!](#help!)
+* [Remaining tasks](#remaining-tasks)
+* [Acknowledgements](#acknowledgements)
 
 ## Requirements
 
@@ -22,150 +42,118 @@ This is the only containerized NFS server that offers **all** of the following f
  
    Usually you can enable these modules with: `modprobe {nfs,nfsd,rpcsec_gss_krb5}`
 1. The container will need to run with `CAP_SYS_ADMIN` (or `--privileged`). This is necessary as the server needs to mount several filesystems inside the container to support its operation, and performing mounts from inside a container is impossible without these capabilities.
-1. The container will need local access to the files you'd like to serve via NFS. You can use Docker volumes, bind mounts, or files baked into a custom image. e.g.
-
-   - `-v some_volume:/some/container/path` (Docker volume)
-   - `-v /some/path/on/host:/some/container/path` (bind mount)
-   - `ADD /some/path/on/host /some/container/path` (Dockerfile)
+1. The container will need local access to the files you'd like to serve via NFS. You can use Docker volumes, bind mounts, files baked into a custom image, or virtually any other means of supplying files to a Docker container.
 
 ## Usage
 
-### Hello, World!
+### Starting the server
 
-You will need to provide your desired [NFS exports](https://linux.die.net/man/5/exports) (`/etc/exports`) upon container startup. You have **three choices** for doing this:
+Starting the `erichough/nfs-server` image will launch an NFS server. You'll need to supply some information upon container startup, which we'll cover below, but briefly speaking your `docker run` command might look something like this:
 
-1. **Bind mount `/etc/exports` into the container**
+    docker run                                     \
+      -v /host/path/to/shared/files:/nfs           \
+      -v /host/path/to/exports.txt:/etc/exports:ro \
+      --cap-add SYS_ADMIN                          \
+      -p 2049:2049                                 \
+      erichough/nfs-server
+      
+Let's break that command down into its individual pieces to see what's required for a successful server startup.
 
-       docker run                                      \
-         -v /host/path/to/exports.txt:/etc/exports:ro  \
-         -v /host/files:/nfs                           \
-         --cap-add SYS_ADMIN                           \
-         -p 2049:2049                                  \
-         erichough/nfs-server
+1. **Provide the files to be shared over NFS**
+
+   As noted in the [requirements](#requirements), the container will need local access to the files you'd like to share over NFS. Some ideas for supplying these files:
+   
+      * [bind mounts](https://docs.docker.com/storage/bind-mounts/) (`-v /host/path/to/shared/files:/nfs`)
+      * [volumes](https://docs.docker.com/storage/volumes/) (`-v some_volume:/nfs`)
+      * files [baked into](https://docs.docker.com/engine/reference/builder/#copy) custom image (e.g. in a `Dockerfile`: `COPY /host/files /nfs`)
+
+   You may use any combination of the above, or any other means to supply files to the container.
+
+1. **Provide your desired [NFS exports](https://linux.die.net/man/5/exports) (`/etc/exports`)**
+
+   You'll need to tell the server which container directories to export. You have *three options* for this; choose whichever one you prefer:
+
+   1. bind mount `/etc/exports` into the container
+
+          docker run                                      \
+            -v /host/path/to/exports.txt:/etc/exports:ro  \
+            ...											  \
+            erichough/nfs-server
          
-1. **Provide each line of `/etc/exports` as an environment variable**
+   1. provide each line of `/etc/exports` as an environment variable
 
-    The container will look for environment variables that start with `NFS_EXPORT_` and end with an integer. e.g. `NFS_EXPORT_0`, `NFS_EXPORT_1`, etc.
+       The container will look for environment variables that start with `NFS_EXPORT_` and end with an integer. e.g. `NFS_EXPORT_0`, `NFS_EXPORT_1`, etc.
 
-       docker run                                                            \
-         -e NFS_EXPORT_0='/nfs/foo 192.168.1.0/24(ro,no_subtree_check)'      \
-         -e NFS_EXPORT_1='/nfs/bar 123.123.123.123/32(rw,no_subtree_check)'  \
-         -v /host/path/foo:/nfs/foo                                          \
-         -v /host/path/bar:/nfs/bar                                          \
-         --cap-add SYS_ADMIN                                                 \
-         -p 2049:2049                                                        \
-         erichough/nfs-server
+          docker run                                                            \
+            -e NFS_EXPORT_0='/nfs/foo                  *(ro,no_subtree_check)'  \
+            -e NFS_EXPORT_1='/nfs/bar 123.123.123.123/32(rw,no_subtree_check)'  \
+            ...																	\
+            erichough/nfs-server
 
-1. **Bake `/etc/exports` into a custom image**
+   1. bake `/etc/exports` into a custom image
 
-    e.g. in a `Dockerfile`:
+       e.g. in a `Dockerfile`:
 
-       FROM ehough/nfs-server
-       ADD /host/path/to/exports.txt /etc/exports
+          FROM ehough/nfs-server
+          ADD /host/path/to/exports.txt /etc/exports
 
-### (Optional) NFSv4 User ID Mapping
+1. **Use `--cap-add SYS_ADMIN` or `--privileged`**
 
-If you'd like to run [`idmapd`](http://man7.org/linux/man-pages/man8/idmapd.8.html) to map between NFSv4 IDs (e.g. `foo@bar.com`) and local users, simply provide [`idmapd.conf`](https://linux.die.net/man/5/idmapd.conf) and `/etc/passwd` to the container. This step is required for Kerberos.
+   As noted in the [requirements](#requirements), the container will need additional privileges. So your `run` command will need either:
+   
+       docker run --cap-add SYS_ADMIN ... erichough/nfs-server
+       
+    or
+    
+       docker run --privileged ... erichough/nfs-server
+       
+    Not sure which to use? Go for `--cap-add SYS_ADMIN` as it's the lesser of two evils.
 
-       docker run                                          \
-         -v /host/path/to/exports.txt:/etc/exports:ro      \
-         -v /host/files:/nfs                               \
-         -v /host/path/to/idmapd.conf:/etc/idmapd.conf:ro  \
-         -v /etc/passwd:/etc/passwd:ro                     \
-         --cap-add SYS_ADMIN                               \
-         -p 2049:2049                                      \
-         erichough/nfs-server
-         
-### (Optional) Kerberos
+1. **Expose the server ports**
 
-You can enable Kerberos security by performing the following additional actions:
+   You'll need to open up at least one server port for your client connections. The ports listed in the examples below are the defaults used by this image and most can be [customized](docs/ports.md).
 
-1. set the environment variable `NFS_ENABLE_KERBEROS` to a non-empty value (e.g. `NFS_ENABLE_KERBEROS=1`)
-1. set the server's hostname via the `--hostname` flag
-1. provide `/etc/krb5.keytab` which contains a principal of the form `nfs/<hostname>`, where `<hostname>` is the hostname you supplied in the previous step.
-1. provide [`/etc/krb5.conf`](https://web.mit.edu/kerberos/krb5-1.12/doc/admin/conf_files/krb5_conf.html)
-1. provide [`/etc/idmapd.conf`](https://linux.die.net/man/5/idmapd.conf)
-1. provide `/etc/passwd` containing your NFS client users
-
-Here's an example:
-
-       docker run                                            \
-         -v /host/path/to/exports.txt:/etc/exports:ro        \
-         -v /host/files:/nfs                                 \
-         -e NFS_ENABLE_KERBEROS=1                            \
-         --hostname my-nfs-server.com                        \
-         -v /host/path/to/server.keytab:/etc/krb5.keytab:ro  \
-         -v /host/path/to/server.krb5conf:/etc/krb5.conf:ro  \
-         -v /host/path/to/idmapd.conf:/etc/idmapd.conf:ro    \
-         -v /etc/passwd:/etc/passwd:ro                       \
-         --cap-add SYS_ADMIN                                 \
-         -p 2049:2049                                        \
-         erichough/nfs-server
-
-### Environment Variables
-
-The following optional environment variables allow you to adjust the server settings to your needs.
-
-- **`NFS_VERSION`** (default is `4.2`)
-
-  Set to `3`, `4`, `4.1`, or `4.2` to fine tune the NFS protocol version. Enabling any version will also enable any lesser versions. e.g. `4.2` will enable versions 4.2, 4.1, 4, **and** 3.
-
-- **`NFS_DISABLE_VERSION_3`** (*not set by default*)
-
-  Set to a non-empty value (e.g. `NFS_DISABLE_VERSION_3=1`) to disable NFS version 3 and run a version-4-only server. This setting is not compatible with `NFS_VERSION=3`.
-
-- **`NFS_PORT`** (default is `2049`)
-
-  Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.nfsd`'s listening port.
-
-- **`NFS_SERVER_THREAD_COUNT`** (default is *CPU core count*)
-
-  Set this to a positive integer to control how many server threads `rpc.nfsd` will use. A good minimum is one thread per CPU core, but 4 or 8 threads per core is probably better.
-
-- **`NFS_PORT_MOUNTD`** (default is `32767`)
-
-  *Only needed for NFS 3*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.mountd`'s listening port.
-
-- **`NFS_PORT_STATD_IN`** (default is `32765`)
-
-  *Only needed for NFS 3*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s listening port.
-
-- **`NFS_PORT_STATD_OUT`** (default is `32766`)
-
-  *Only needed for NFS 3*. Set this to any valid port number (`1` - `65535` inclusive) to change `rpc.statd`'s outgoing connection port.
-  
-- **`NFS_ENABLE_KERBEROS`** (*not set by default*)
-
-  Set to a non-empty value (e.g. `NFS_ENABLE_KERBEROS=1`) to enable Kerberos on this server. See the [Kerberos](#kerberos) section above for further details.
-
-### Which ports need to be exposed?
-
-* NFSv4
-  * `2049`
-* NFSv3
-  * `111` & `111/udp`
-  * `2049` & `2049/udp`
-  * `32765` & `32765/udp`
-  * `32767` & `32767/udp`
-  
-These ports can be exposed using the usual [Docker syntax](https://docs.docker.com/engine/reference/run/#expose-incoming-ports) (e.g. `-p 2049:2049`), and most can be customized via [environment variables](#environment-variables).
-
+   * If your clients connect via **NFSv4 only**, you can get by with just TCP port `2049`:
+     
+         docker run -p 2049:2049 ... erichough/nfs-server
+           
+   * If you need to support **NFSv3**, you'll need to expose a lot more ports:
+   
+         docker run                          \
+           -p 2049:2049   -p 2049:2049/udp   \
+           -p 111:111     -p 111:111/udp     \
+           -p 32765:32765 -p 32765:32765/udp \
+           -p 32767:32767 -p 32767:32767/udp \
+           ...                               \
+           erichough/nfs-server
+      
+If you pay close attention to each of the items in this section, the server should start quickly and be ready to accept your NFS clients.
+      
 ### Mounting filesystems from a client
 
-    # mount -o nfsvers=4 <container-IP>:/some/export /some/local/path
-    
-### Connecting to the running container
+    # mount <container-IP>:/some/export /some/local/path
 
-    # docker exec -it <container-id> bash
+## Optional Features
 
-## Performance considerations
+  * [Kerberos security](docs/feature/kerberos.md)
+  * [NFSv4 user ID mapping](docs/feature/nfsv4-user-id-mapping.md)
+  * [AppArmor integration](docs/feature/apparmor.md)
+  
+## Advanced
 
-- Running the container with `--network host` *might* improve network performance by 10% - 20% [[1](https://jtway.co/docker-network-performance-b95bce32b4b9),[2](https://www.percona.com/blog/2016/08/03/testing-docker-multi-host-network-performance/)], though this hasn't been tested.
+  * [customizing which ports are used](docs/advanced/ports.md)
+  * [customizing NFS versions offered](docs/advanced/nfs-versions.md)
+  * [performance tuning](docs/advanced/performance-tuning.md)
+
+## Help!
+
+Please [open an issue](https://github.com/ehough/docker-nfs-server/issues) if you have any questions, constructive criticism, or can't get something to work.
 
 ## Remaining tasks
 
-- switch back to Alpine Linux once [this bug](https://bugs.alpinelinux.org/issues/8470) in `nfs-utils` is fixed
+- switch to Alpine Linux once [this bug](https://bugs.alpinelinux.org/issues/8470) in `nfs-utils` is fixed
 - figure out why `rpc.nfsd` takes 5 minutes to startup/timeout unless `rpcbind` is running
+- add more examples, including Docker Compose
 
 ## Acknowledgements
 
