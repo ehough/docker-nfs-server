@@ -94,8 +94,10 @@ Let's break that command down into its individual pieces to see what's required 
 
        e.g. in a `Dockerfile`:
 
-          FROM ehough/nfs-server
-          ADD /host/path/to/exports.txt /etc/exports
+       ```Dockerfile
+       FROM ehough/nfs-server
+       ADD /host/path/to/exports.txt /etc/exports
+       ```
 
 1. **Use `--cap-add SYS_ADMIN` or `--privileged`**
 
