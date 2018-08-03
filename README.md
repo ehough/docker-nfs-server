@@ -77,7 +77,7 @@ Let's break that command down into its individual pieces to see what's required 
 
           docker run                                      \
             -v /host/path/to/exports.txt:/etc/exports:ro  \
-            ...											  \
+            ...                                           \
             erichough/nfs-server
          
    1. provide each line of `/etc/exports` as an environment variable
@@ -87,7 +87,7 @@ Let's break that command down into its individual pieces to see what's required 
           docker run                                                            \
             -e NFS_EXPORT_0='/nfs/foo                  *(ro,no_subtree_check)'  \
             -e NFS_EXPORT_1='/nfs/bar 123.123.123.123/32(rw,no_subtree_check)'  \
-            ...																	\
+            ...                                                                 \
             erichough/nfs-server
 
    1. bake `/etc/exports` into a custom image
@@ -95,13 +95,13 @@ Let's break that command down into its individual pieces to see what's required 
        e.g. in a `Dockerfile`:
 
        ```Dockerfile
-       FROM ehough/nfs-server
+       FROM erichough/nfs-server
        ADD /host/path/to/exports.txt /etc/exports
        ```
 
 1. **Use `--cap-add SYS_ADMIN` or `--privileged`**
 
-   As noted in the [requirements](#requirements), the container will need additional privileges. So your `run` command will need either:
+   As noted in the [requirements](#requirements), the container will need additional privileges. So your `run` command will need *either*:
    
        docker run --cap-add SYS_ADMIN ... erichough/nfs-server
        
@@ -119,7 +119,7 @@ Let's break that command down into its individual pieces to see what's required 
      
          docker run -p 2049:2049 ... erichough/nfs-server
            
-   * If you need to support **NFSv3**, you'll need to expose a lot more ports:
+   * If you'd like to support **NFSv3**, you'll need to expose a lot more ports:
    
          docker run                          \
            -p 2049:2049   -p 2049:2049/udp   \
@@ -138,7 +138,7 @@ If you pay close attention to each of the items in this section, the server shou
 ## Optional Features
 
   * [Kerberos security](doc/feature/kerberos.md)
-  * [NFSv4 user ID mapping](doc/feature/nfsv4-user-id-mapping.md)
+  * [NFSv4 user ID mapping](doc/feature/nfs4-user-id-mapping.md)
   * [AppArmor integration](doc/feature/apparmor.md)
   
 ## Advanced
