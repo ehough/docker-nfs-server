@@ -303,8 +303,15 @@ init_trap() {
 
 init_exports() {
 
+  # first, see if it's bind-mounted
   if mount | grep -Eq "^[^ ]+ on $PATH_FILE_ETC_EXPORTS type "; then
-    log "$PATH_FILE_ETC_EXPORTS already exists in the container"
+    log "$PATH_FILE_ETC_EXPORTS is bind-mounted"
+    return
+  fi
+
+  # maybe it's baked-in to the image
+  if [[ -f $PATH_FILE_ETC_EXPORTS && -r $PATH_FILE_ETC_EXPORTS && -s $PATH_FILE_ETC_EXPORTS ]]; then
+    log "$PATH_FILE_ETC_EXPORTS is baked into the image"
     return
   fi
 
