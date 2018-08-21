@@ -12,8 +12,8 @@ RUN apt-get update                                                              
     apt-get clean                                                                 && \
     rm -rf /var/lib/apt/lists                                                     && \
                                                                                      \
-    # remove the default idmapd.conf
-    rm -v /etc/idmapd.conf
+    # remove the default config files
+    rm -v /etc/idmapd.conf /etc/exports
 
 # http://wiki.linux-nfs.org/wiki/index.php/Nfsv4_configuration
 RUN mkdir -p /var/lib/nfs/rpc_pipefs && \
