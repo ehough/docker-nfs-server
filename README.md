@@ -41,7 +41,7 @@ This is the only containerized NFS server that offers **all** of the following f
    - `rpcsec_gss_krb5` (*only if Kerberos is used*)
  
    Usually you can enable these modules with: `modprobe {nfs,nfsd,rpcsec_gss_krb5}`
-1. The container will need to run with `CAP_SYS_ADMIN` (or `--privileged`). This is necessary as the server needs to mount several filesystems inside the container to support its operation, and performing mounts from inside a container is impossible without these capabilities.
+1. The container will need to run with `CAP_SYS_ADMIN` (or `--privileged`). This is necessary as the server needs to mount several filesystems *inside* the container to support its operation, and performing mounts from inside a container is impossible without these capabilities.
 1. The container will need local access to the files you'd like to serve via NFS. You can use Docker volumes, bind mounts, files baked into a custom image, or virtually any other means of supplying files to a Docker container.
 
 ## Usage
@@ -50,11 +50,11 @@ This is the only containerized NFS server that offers **all** of the following f
 
 Starting the `erichough/nfs-server` image will launch an NFS server. You'll need to supply some information upon container startup, which we'll cover below, but briefly speaking your `docker run` command might look something like this:
 
-    docker run                                     \
-      -v /host/path/to/shared/files:/nfs           \
-      -v /host/path/to/exports.txt:/etc/exports:ro \
-      --cap-add SYS_ADMIN                          \
-      -p 2049:2049                                 \
+    docker run                                            \
+      -v /host/path/to/shared/files:/some/container/path  \
+      -v /host/path/to/exports.txt:/etc/exports:ro        \
+      --cap-add SYS_ADMIN                                 \
+      -p 2049:2049                                        \
       erichough/nfs-server
       
 Let's break that command down into its individual pieces to see what's required for a successful server startup.
@@ -63,15 +63,15 @@ Let's break that command down into its individual pieces to see what's required 
 
    As noted in the [requirements](#requirements), the container will need local access to the files you'd like to share over NFS. Some ideas for supplying these files:
    
-      * [bind mounts](https://docs.docker.com/storage/bind-mounts/) (`-v /host/path/to/shared/files:/nfs`)
-      * [volumes](https://docs.docker.com/storage/volumes/) (`-v some_volume:/nfs`)
-      * files [baked into](https://docs.docker.com/engine/reference/builder/#copy) custom image (e.g. in a `Dockerfile`: `COPY /host/files /nfs`)
+      * [bind mounts](https://docs.docker.com/storage/bind-mounts/) (`-v /host/path/to/shared/files:/some/container/path`)
+      * [volumes](https://docs.docker.com/storage/volumes/) (`-v some_volume:/some/container/path`)
+      * files [baked into](https://docs.docker.com/engine/reference/builder/#copy) custom image (e.g. in a `Dockerfile`: `COPY /host/files /some/container/path`)
 
    You may use any combination of the above, or any other means to supply files to the container.
 
 1. **Provide your desired [NFS exports](https://linux.die.net/man/5/exports) (`/etc/exports`)**
 
-   You'll need to tell the server which container directories to export. You have *three options* for this; choose whichever one you prefer:
+   You'll need to tell the server which **container directories** to share. You have *three options* for this; choose whichever one you prefer:
 
    1. bind mount `/etc/exports` into the container
 
@@ -84,10 +84,10 @@ Let's break that command down into its individual pieces to see what's required 
 
        The container will look for environment variables that start with `NFS_EXPORT_` and end with an integer. e.g. `NFS_EXPORT_0`, `NFS_EXPORT_1`, etc.
 
-          docker run                                                            \
-            -e NFS_EXPORT_0='/nfs/foo                  *(ro,no_subtree_check)'  \
-            -e NFS_EXPORT_1='/nfs/bar 123.123.123.123/32(rw,no_subtree_check)'  \
-            ...                                                                 \
+          docker run                                                                       \
+            -e NFS_EXPORT_0='/container/path/foo                  *(ro,no_subtree_check)'  \
+            -e NFS_EXPORT_1='/container/path/bar 123.123.123.123/32(rw,no_subtree_check)'  \
+            ...                                                                            \
             erichough/nfs-server
 
    1. bake `/etc/exports` into a custom image
@@ -153,7 +153,7 @@ Please [open an issue](https://github.com/ehough/docker-nfs-server/issues) if yo
 
 ## Remaining tasks
 
-- switch to Alpine Linux once [this bug](https://bugs.alpinelinux.org/issues/8470) in `nfs-utils` is fixed
+- switch to Alpine Linux once `nfs-utils` version 2.3.1-r4 (or higher) is released in a stable repo (maybe Alpine 3.9?). See [this bug](https://bugs.alpinelinux.org/issues/8470) for details
 - figure out why `rpc.nfsd` takes 5 minutes to startup/timeout unless `rpcbind` is running
 - add more examples, including Docker Compose
 
