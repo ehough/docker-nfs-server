@@ -63,7 +63,7 @@ log() {
   echo "----> $1"
 }
 
-logHeader() {
+log_header() {
 
   echo ''
   echo '=================================================================='
@@ -142,7 +142,7 @@ stop_exportfs() {
 
 stop() {
 
-  logHeader 'terminating ...'
+  log_header 'terminating ...'
 
   kill_process_if_running "$PATH_BIN_RPC_SVCGSSD"
   stop_nfsd
@@ -154,7 +154,7 @@ stop() {
   stop_mount "$MOUNT_PATH_NFSD"
   stop_mount "$MOUNT_PATH_RPC_PIPEFS"
 
-  logHeader 'terminated'
+  log_header 'terminated'
 
   exit 0
 }
@@ -516,7 +516,7 @@ boot_main_svcgssd() {
 
 boot_main_print_ready_message() {
 
-  logHeader "ready and waiting for connections on port $(get_reqd_nfsd_port)"
+  log_header "ready and waiting for connections on port $(get_reqd_nfsd_port)"
   log 'list of exports:'
   cat $PATH_FILE_ETC_EXPORTS
 }
@@ -528,7 +528,7 @@ boot_main_print_ready_message() {
 
 init() {
 
-  logHeader 'setting up'
+  log_header 'setting up'
 
   init_trap
   init_exports
@@ -539,7 +539,7 @@ init() {
 
 boot() {
 
-  logHeader 'starting services'
+  log_header 'starting services'
 
   boot_main_mounts
   boot_main_rpcbind
