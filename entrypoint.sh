@@ -273,9 +273,6 @@ assert_nfs_version() {
 
   get_reqd_nfs_version | grep -Eq '^(3|4|4\.1|4\.2)$'
   on_failure bail "please set $ENV_VAR_NFS_VERSION to one of: 4.2, 4.1, 4, 3"
-}
-
-assert_disabled_nfs3() {
 
   if [[ -z "$(is_nfs3_enabled)" && "$(get_reqd_nfs_version)" == '3' ]]; then
     bail 'you cannot simultaneously enable and disable NFS version 3'
@@ -291,16 +288,17 @@ assert_nfsd_threads() {
   fi
 }
 
-assert_kerberos_requirements() {
+assert_at_least_one_export() {
 
-  if [[ -n "$(is_kerberos_enabled)" ]]; then
+  # ensure /etc/exports has at least one line
+  grep -Evq '^\s*#|^\s*$' $PATH_FILE_ETC_EXPORTS
+  on_failure bail "$PATH_FILE_ETC_EXPORTS has no exports"
+}
 
-    assert_file_provided "$PATH_FILE_ETC_IDMAPD_CONF"
-    assert_file_provided "$PATH_FILE_ETC_KRB5_KEYTAB"
-    assert_file_provided "$PATH_FILE_ETC_KRB5_CONF"
+assert_linux_capabilities() {
 
-    assert_kernel_mod rpcsec_gss_krb5
-  fi
+  capsh --print | grep -Eq "^Current: = .*,?cap_sys_admin(,|$)"
+  on_failure bail 'missing CAP_SYS_ADMIN. be sure to run this image with --cap-add SYS_ADMIN or --privileged'
 }
 
 
@@ -383,23 +381,27 @@ init_assertions() {
   assert_port "$ENV_VAR_NFS_PORT_STATD_IN"
   assert_port "$ENV_VAR_NFS_PORT_STATD_OUT"
   assert_nfs_version
-  assert_disabled_nfs3
   assert_nfsd_threads
 
   # check kernel modules
   assert_kernel_mod nfs
   assert_kernel_mod nfsd
 
-  # ensure /etc/exports has at least one line
-  grep -Evq '^\s*#|^\s*$' $PATH_FILE_ETC_EXPORTS
-  on_failure bail "$PATH_FILE_ETC_EXPORTS has no exports"
+  # make sure we have at least one export
+  assert_at_least_one_export
 
   # ensure we have CAP_SYS_ADMIN
-  capsh --print | grep -Eq "^Current: = .*,?cap_sys_admin(,|$)"
-  on_failure bail 'missing CAP_SYS_ADMIN. be sure to run this image with --cap-add SYS_ADMIN or --privileged'
+  assert_linux_capabilities
 
   # perform Kerberos assertions
-  assert_kerberos_requirements
+  if [[ -n "$(is_kerberos_enabled)" ]]; then
+
+    assert_file_provided "$PATH_FILE_ETC_IDMAPD_CONF"
+    assert_file_provided "$PATH_FILE_ETC_KRB5_KEYTAB"
+    assert_file_provided "$PATH_FILE_ETC_KRB5_CONF"
+
+    assert_kernel_mod rpcsec_gss_krb5
+  fi
 }
 
 
