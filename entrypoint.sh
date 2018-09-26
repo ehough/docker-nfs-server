@@ -2,6 +2,9 @@
 #
 # ehough/docker-nfs-server: A lightweight, robust, flexible, and containerized NFS server.
 #
+# https://hub.docker.com/r/erichough/nfs-server
+# https://github.com/ehough/docker-nfs-server
+#
 # Copyright (C) 2017-2018  Eric D. Hough
 #
 # This program is free software: you can redistribute it and/or modify
