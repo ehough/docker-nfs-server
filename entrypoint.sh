@@ -595,9 +595,9 @@ init() {
 
   log_header 'setting up'
 
-  init_trap
   init_exports
   init_assertions
+  init_trap
 
   log 'setup complete'
 }
