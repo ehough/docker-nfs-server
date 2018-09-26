@@ -53,6 +53,8 @@ readonly PATH_FILE_ETC_KRB5_KEYTAB='/etc/krb5.keytab'
 readonly MOUNT_PATH_NFSD='/proc/fs/nfsd'
 readonly MOUNT_PATH_RPC_PIPEFS='/var/lib/nfs/rpc_pipefs'
 
+readonly REGEX_EXPORTS_LINES_TO_SKIP='^\s*#|^\s*$'
+
 
 ######################################################################################
 ### logging
@@ -291,7 +293,7 @@ assert_nfsd_threads() {
 assert_at_least_one_export() {
 
   # ensure /etc/exports has at least one line
-  grep -Evq '^\s*#|^\s*$' $PATH_FILE_ETC_EXPORTS
+  grep -Evq "$REGEX_EXPORTS_LINES_TO_SKIP" $PATH_FILE_ETC_EXPORTS
   on_failure bail "$PATH_FILE_ETC_EXPORTS has no exports"
 }
 
@@ -330,6 +332,7 @@ init_exports() {
   local candidate_export_vars
   local candidate_export_var
 
+  # collect all candidate environment variable names
   candidate_export_vars=$(compgen -A variable | grep -E 'NFS_EXPORT_[0-9]+' | sort)
   on_failure bail 'failed to detect NFS_EXPORT_* variables'
 
@@ -341,17 +344,22 @@ init_exports() {
 
   for candidate_export_var in $candidate_export_vars; do
 
-    local line=${!candidate_export_var}
+    local line="${!candidate_export_var}"
+
+    # skip comments and empty lines
+    if [[ "$line" =~ $REGEX_EXPORTS_LINES_TO_SKIP ]]; then
+      log_warning "skipping $candidate_export_var environment variable since it contains only whitespace or a comment"
+      continue;
+    fi
+
     local line_as_array
     read -r -a line_as_array <<< "$line"
     local dir="${line_as_array[0]}"
 
     if [[ ! -d "$dir" ]]; then
-      log_warning "skipping $candidate_export_var since $dir is not a container directory"
+      log_warning "skipping $candidate_export_var environment variable since $dir is not a container directory"
       continue
     fi
-
-    log "will export $line"
 
     if [[ $count_valid_exports -gt 0 ]]; then
       exports=$exports$'\n'
@@ -567,7 +575,15 @@ summarize_exports() {
   log 'list of container exports:'
 
   while read -r export; do
-    log "  $export"
+
+    # skip comments and empty lines
+    if [[ "$export" =~ $REGEX_EXPORTS_LINES_TO_SKIP ]]; then
+      continue;
+    fi
+
+    # log it w/out leading and trailing whitespace
+    log "  $(echo -e "$export" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
   done < "$PATH_FILE_ETC_EXPORTS"
 }
 
