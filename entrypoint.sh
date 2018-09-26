@@ -197,32 +197,32 @@ stop() {
 ### runtime environment detection
 ######################################################################################
 
-get_reqd_nfs_version() {
+get_requested_nfs_version() {
 
   echo "${!ENV_VAR_NFS_VERSION:-$DEFAULT_NFS_VERSION}"
 }
 
-get_reqd_nfsd_threads() {
+get_requested_count_nfsd_threads() {
 
    echo "${!ENV_VAR_NFS_SERVER_THREAD_COUNT:-$DEFAULT_NFS_SERVER_THREAD_COUNT}"
 }
 
-get_reqd_mountd_port() {
+get_requested_port_mountd() {
 
   echo "${!ENV_VAR_NFS_PORT_MOUNTD:-$DEFAULT_NFS_PORT_MOUNTD}"
 }
 
-get_reqd_nfsd_port() {
+get_requested_port_nfsd() {
 
   echo "${!ENV_VAR_NFS_PORT:-$DEFAULT_NFS_PORT}"
 }
 
-get_reqd_statd_in_port() {
+get_requested_port_statd_in() {
 
   echo "${!ENV_VAR_NFS_PORT_STATD_IN:-$DEFAULT_NFS_PORT_STATD_IN}"
 }
 
-get_reqd_statd_out_port() {
+get_requested_port_statd_out() {
 
   echo "${!ENV_VAR_NFS_PORT_STATD_OUT:-$DEFAULT_NFS_PORT_STATD_OUT}"
 }
@@ -276,17 +276,19 @@ assert_port() {
 
 assert_nfs_version() {
 
-  get_reqd_nfs_version | grep -Eq '^(3|4|4\.1|4\.2)$'
+  local -r version="$(get_requested_nfs_version)"
+
+  echo "$version" | grep -Eq '^(3|4|4\.1|4\.2)$'
   on_failure bail "please set $ENV_VAR_NFS_VERSION to one of: 4.2, 4.1, 4, 3"
 
-  if [[ -z "$(is_nfs3_enabled)" && "$(get_reqd_nfs_version)" == '3' ]]; then
+  if [[ -z "$(is_nfs3_enabled)" && "$version" = '3' ]]; then
     bail 'you cannot simultaneously enable and disable NFS version 3'
   fi
 }
 
 assert_nfsd_threads() {
 
-  local -r reqd_thread_count=$(get_reqd_nfsd_threads)
+  local -r reqd_thread_count=$(get_requested_count_nfsd_threads)
 
   if [[ "$reqd_thread_count" -lt 1 ]]; then
     bail "please set $ENV_VAR_NFS_SERVER_THREAD_COUNT to a positive integer"
@@ -433,14 +435,14 @@ boot_helper_mount() {
 
 boot_helper_get_version_flags() {
 
-  local -r reqd_version="$(get_reqd_nfs_version)"
+  local -r reqd_version="$(get_requested_nfs_version)"
   local flags=('--nfs-version' "$reqd_version" '--no-nfs-version' 2)
 
   if [[ -z "$(is_nfs3_enabled)" ]]; then
     flags+=('--no-nfs-version' 3)
   fi
 
-  if [[ "$reqd_version" == '3' ]]; then
+  if [[ "$reqd_version" = '3' ]]; then
     flags+=('--no-nfs-version' 4)
   fi
 
@@ -470,7 +472,7 @@ boot_main_mountd() {
 
   local version_flags
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
-  local -r port=$(get_reqd_mountd_port)
+  local -r port=$(get_requested_port_mountd)
   local -r args=('--debug' 'all' '--port' "$port" "${version_flags[@]}")
 
   # yes, rpc.mountd is required even for NFS v4: https://forums.gentoo.org/viewtopic-p-7724856.html#7724856
@@ -491,7 +493,7 @@ boot_main_rpcbind() {
 
 boot_main_idmapd() {
 
-  if [[ "$(get_reqd_nfs_version)" != '3' && -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
+  if [[ "$(get_requested_nfs_version)" != '3' && -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
     log 'starting idmapd'
     $PATH_BIN_IDMAPD -v -S
     on_failure stop 'idmapd failed'
@@ -504,8 +506,8 @@ boot_main_statd() {
     return
   fi
 
-  local -r port_in=$(get_reqd_statd_in_port)
-  local -r port_out=$(get_reqd_statd_out_port)
+  local -r port_in=$(get_requested_port_statd_in)
+  local -r port_out=$(get_requested_port_statd_out)
   local -r args=('--no-notify' '--port' "$port_in" '--outgoing-port' "$port_out")
 
   log "starting statd on port $port_in (outgoing connections from port $port_out)"
@@ -517,8 +519,8 @@ boot_main_nfsd() {
 
   local version_flags
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
-  local -r threads=$(get_reqd_nfsd_threads)
-  local -r port=$(get_reqd_nfsd_port)
+  local -r threads=$(get_requested_count_nfsd_threads)
+  local -r port=$(get_requested_port_nfsd)
   local -r args=('--debug' 8 '--port' "$port" "${version_flags[@]}" "$threads")
 
   log "starting rpc.nfsd on port $port with $threads server thread(s)"
@@ -548,7 +550,7 @@ boot_main_svcgssd() {
 
 summarize_nfs_versions() {
 
-  local -r reqd_version="$(get_reqd_nfs_version)"
+  local -r reqd_version="$(get_requested_nfs_version)"
   local versions=''
 
   case "$reqd_version" in
@@ -592,7 +594,9 @@ summarize_exports() {
 
 summarize_ports() {
 
-  local -r port_nfsd="$(get_reqd_nfsd_port)"
+  local -r port_nfsd="$(get_requested_port_nfsd)"
+  local -r port_mountd="$(get_requested_port_mountd)"
+  local -r port_statd_in="$(get_requested_port_statd_in)"
 
   if [[ -z "$(is_nfs3_enabled)" ]]; then
     log "list of container ports that should be exposed: $port_nfsd (TCP)"
@@ -600,8 +604,8 @@ summarize_ports() {
     log 'list of container ports that should be exposed:'
     log '  111 (TCP and UDP)'
     log "  $port_nfsd (TCP and UDP)"
-    log "  $(get_reqd_statd_in_port) (TCP and UDP)"
-    log "  $(get_reqd_mountd_port) (TCP and UDP)"
+    log "  $port_statd_in (TCP and UDP)"
+    log "  $port_mountd (TCP and UDP)"
   fi
 }
 
