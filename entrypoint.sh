@@ -236,13 +236,6 @@ is_nfs3_enabled() {
   fi
 }
 
-is_nfs4_enabled() {
-
-  if [[ "$(get_reqd_nfs_version)" =~ '^4' ]]; then
-    echo 1
-  fi
-}
-
 
 ######################################################################################
 ### runtime configuration assertions
