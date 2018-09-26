@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ## [Unreleased]
 
 ### Added
-* upon successful server startup, log NFS versions, exports, and ports
+* upon successful server startup, log:
+  * list of enabled NFS versions
+  * list of exports
+  * list of ports that should be exposed
+* improved error detection and logging
 
 ### Fixed
 ### Changed
