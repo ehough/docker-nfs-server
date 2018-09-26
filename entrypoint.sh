@@ -2,6 +2,9 @@
 #
 # ehough/docker-nfs-server: A lightweight, robust, flexible, and containerized NFS server.
 #
+# https://hub.docker.com/r/erichough/nfs-server
+# https://github.com/ehough/docker-nfs-server
+#
 # Copyright (C) 2017-2018  Eric D. Hough
 #
 # This program is free software: you can redistribute it and/or modify
@@ -53,9 +56,11 @@ readonly PATH_FILE_ETC_KRB5_KEYTAB='/etc/krb5.keytab'
 readonly MOUNT_PATH_NFSD='/proc/fs/nfsd'
 readonly MOUNT_PATH_RPC_PIPEFS='/var/lib/nfs/rpc_pipefs'
 
+readonly REGEX_EXPORTS_LINES_TO_SKIP='^\s*#|^\s*$'
+
 
 ######################################################################################
-### general purpose utilities
+### logging
 ######################################################################################
 
 log() {
@@ -63,35 +68,63 @@ log() {
   echo "----> $1"
 }
 
-logHeader() {
+log_warning() {
 
-  echo ''
-  echo '=================================================================='
-  echo "      $1" | awk '{print toupper($0)}'
-  echo '=================================================================='
+  log "WARNING: $1"
 }
+
+log_error() {
+
+  log ''
+  log "ERROR: $1"
+  log ''
+}
+
+log_header() {
+
+  echo "\
+
+==================================================================
+      $(echo "$1" | awk '{print toupper($0)}')
+=================================================================="
+}
+
+
+######################################################################################
+### error handling
+######################################################################################
 
 bail() {
 
-  log "ERROR: $1"
+  log_error "$1"
   exit 1
 }
 
-warn_on_failure() {
+on_failure() {
 
   # shellcheck disable=SC2181
-  if [[ $? -ne 0 ]]; then
-    log "WARNING: $1"
+  if [[ $? -eq 0 ]]; then
+    return
   fi
+
+  case "$1" in
+    warn)
+      log_warning "$2"
+      ;;
+    stop)
+      log_error "$2"
+      stop
+      ;;
+    *)
+      bail "$2"
+      ;;
+  esac
 }
 
-exit_on_failure() {
 
-  # shellcheck disable=SC2181
-  if [[ $? -ne 0 ]]; then
-    bail "$1"
-  fi
-}
+######################################################################################
+### process control
+######################################################################################
 
 kill_process_if_running() {
 
@@ -101,7 +134,7 @@ kill_process_if_running() {
   if [[ -n $pid ]]; then
     log "killing $base"
     kill -TERM "$pid"
-    warn_on_failure "unable to kill $base"
+    on_failure warn "unable to kill $base"
   else
     log "$base was not running"
   fi
@@ -118,11 +151,11 @@ stop_mount() {
   local -r type=$(basename "$path")
 
   if mount | grep -Eq ^"$type on $path\\s+"; then
-    log "un-mounting $type from $path"
+    log "un-mounting $type filesystem from $path"
     umount -v "$path"
-    warn_on_failure "unable to un-mount $type from $path"
+    on_failure warn "unable to un-mount $type filesystem from $path"
   else
-    log "$type was not mounted on $path"
+    log "no active mount at $path"
   fi
 }
 
@@ -130,19 +163,19 @@ stop_nfsd() {
 
   log 'stopping nfsd'
   $PATH_BIN_NFSD 0
-  warn_on_failure 'unable to stop nfsd. if it had started already, check Docker host for lingering [nfsd] processes'
+  on_failure warn 'unable to stop nfsd. if it had started already, check Docker host for lingering [nfsd] processes'
 }
 
 stop_exportfs() {
 
-  log 'un-exporting filesystems'
+  log 'un-exporting filesystem(s)'
   $PATH_BIN_EXPORTFS -ua
-  warn_on_failure 'unable to un-export filesystems'
+  on_failure warn 'unable to un-export filesystem(s)'
 }
 
 stop() {
 
-  logHeader 'terminating ...'
+  log_header 'terminating ...'
 
   kill_process_if_running "$PATH_BIN_RPC_SVCGSSD"
   stop_nfsd
@@ -154,18 +187,9 @@ stop() {
   stop_mount "$MOUNT_PATH_NFSD"
   stop_mount "$MOUNT_PATH_RPC_PIPEFS"
 
-  logHeader 'terminated'
+  log_header 'terminated'
 
   exit 0
-}
-
-stop_on_failure() {
-
-  # shellcheck disable=SC2181
-  if [[ $? -ne 0 ]]; then
-    log "$1"
-    stop
-  fi
 }
 
 
@@ -217,13 +241,6 @@ is_nfs3_enabled() {
   fi
 }
 
-is_nfs4_enabled() {
-
-  if [[ "$(get_reqd_nfs_version)" =~ '^4' ]]; then
-    echo 1
-  fi
-}
-
 
 ######################################################################################
 ### runtime configuration assertions
@@ -238,32 +255,29 @@ assert_file_provided() {
 
 assert_kernel_mod() {
 
-  local -r moduleName=$1
+  local -r module=$1
 
-  log "checking for presence of kernel module: $moduleName"
+  log "checking for presence of kernel module: $module"
 
-  lsmod | grep -Eq "^$moduleName\\s+" || [ -d "/sys/module/$moduleName" ]
+  lsmod | grep -Eq "^$module\\s+" || [ -d "/sys/module/$module" ]
 
-  exit_on_failure "$moduleName module is not loaded on the Docker host's kernel (try: modprobe $moduleName)"
+  on_failure bail "$module module is not loaded in the Docker host's kernel (try: modprobe $module)"
 }
 
 assert_port() {
 
-  local -r envName=$1
-  local -r value=${!envName}
+  local -r variable_name=$1
+  local -r value=${!variable_name}
 
   if [[ -n "$value" && ( "$value" -lt 1 || "$value" -gt 65535 ) ]]; then
-    bail "please set $1 to a value between 1 and 65535 inclusive"
+    bail "please set $variable_name to an integer between 1 and 65535 inclusive"
   fi
 }
 
 assert_nfs_version() {
 
   get_reqd_nfs_version | grep -Eq '^(3|4|4\.1|4\.2)$'
-  exit_on_failure "please set $ENV_VAR_NFS_VERSION to 3, 4, 4.1, or 4.2"
-}
-
-assert_disabled_nfs3() {
+  on_failure bail "please set $ENV_VAR_NFS_VERSION to one of: 4.2, 4.1, 4, 3"
 
   if [[ -z "$(is_nfs3_enabled)" && "$(get_reqd_nfs_version)" == '3' ]]; then
     bail 'you cannot simultaneously enable and disable NFS version 3'
@@ -272,23 +286,24 @@ assert_disabled_nfs3() {
 
 assert_nfsd_threads() {
 
-  local -r requested=$(get_reqd_nfsd_threads)
+  local -r reqd_thread_count=$(get_reqd_nfsd_threads)
 
-  if [[ "$requested" -lt 1 ]]; then
-    bail "please set $ENV_VAR_NFS_SERVER_THREAD_COUNT to a positive value"
+  if [[ "$reqd_thread_count" -lt 1 ]]; then
+    bail "please set $ENV_VAR_NFS_SERVER_THREAD_COUNT to a positive integer"
   fi
 }
 
-assert_kerberos_requirements() {
+assert_at_least_one_export() {
 
-  if [[ -n "$(is_kerberos_enabled)" ]]; then
+  # ensure /etc/exports has at least one line
+  grep -Evq "$REGEX_EXPORTS_LINES_TO_SKIP" $PATH_FILE_ETC_EXPORTS
+  on_failure bail "$PATH_FILE_ETC_EXPORTS has no exports"
+}
 
-    assert_file_provided "$PATH_FILE_ETC_IDMAPD_CONF"
-    assert_file_provided "$PATH_FILE_ETC_KRB5_KEYTAB"
-    assert_file_provided "$PATH_FILE_ETC_KRB5_CONF"
+assert_linux_capabilities() {
 
-    assert_kernel_mod rpcsec_gss_krb5
-  fi
+  capsh --print | grep -Eq "^Current: = .*,?cap_sys_admin(,|$)"
+  on_failure bail 'missing CAP_SYS_ADMIN. be sure to run this image with --cap-add SYS_ADMIN or --privileged'
 }
 
 
@@ -315,46 +330,58 @@ init_exports() {
     return
   fi
 
-  local collected=0
+  local count_valid_exports=0
   local exports=''
-  local candidateExportVariables
+  local candidate_export_vars
+  local candidate_export_var
 
-  candidateExportVariables=$(compgen -A variable | grep -E 'NFS_EXPORT_[0-9]+' | sort)
-  exit_on_failure "please provide $PATH_FILE_ETC_EXPORTS or set NFS_EXPORT_* environment variables"
+  # collect all candidate environment variable names
+  candidate_export_vars=$(compgen -A variable | grep -E 'NFS_EXPORT_[0-9]+' | sort)
+  on_failure bail 'failed to detect NFS_EXPORT_* variables'
 
-  log "building $PATH_FILE_ETC_EXPORTS"
+  if [[ -z "$candidate_export_vars" ]]; then
+    bail "please provide $PATH_FILE_ETC_EXPORTS to the container or set at least one NFS_EXPORT_* environment variable"
+  fi
 
-  for exportVariable in $candidateExportVariables; do
+  log "building $PATH_FILE_ETC_EXPORTS from environment variables"
 
-    local line=${!exportVariable}
-    local lineAsArray
-    read -r -a lineAsArray <<< "$line"
-    local dir="${lineAsArray[0]}"
+  for candidate_export_var in $candidate_export_vars; do
+
+    local line="${!candidate_export_var}"
+
+    # skip comments and empty lines
+    if [[ "$line" =~ $REGEX_EXPORTS_LINES_TO_SKIP ]]; then
+      log_warning "skipping $candidate_export_var environment variable since it contains only whitespace or a comment"
+      continue;
+    fi
+
+    local line_as_array
+    read -r -a line_as_array <<< "$line"
+    local dir="${line_as_array[0]}"
 
     if [[ ! -d "$dir" ]]; then
-      log "skipping $line since $dir is not a directory"
+      log_warning "skipping $candidate_export_var environment variable since $dir is not a container directory"
       continue
     fi
 
-    log "will export $line"
-
-    if [[ $collected -gt 0 ]]; then
+    if [[ $count_valid_exports -gt 0 ]]; then
       exports=$exports$'\n'
     fi
 
     exports=$exports$line
 
-    (( collected++ ))
+    (( count_valid_exports++ ))
 
   done
 
-  if [[ $collected -eq 0 ]]; then
+  log "collected $count_valid_exports valid export(s) from NFS_EXPORT_* environment variables"
+
+  if [[ $count_valid_exports -eq 0 ]]; then
     bail 'no valid exports'
   fi
 
-  log "will export $collected filesystem(s)"
-
   echo "$exports" > $PATH_FILE_ETC_EXPORTS
+  on_failure bail "unable to write to $PATH_FILE_ETC_EXPORTS"
 }
 
 init_assertions() {
@@ -365,23 +392,27 @@ init_assertions() {
   assert_port "$ENV_VAR_NFS_PORT_STATD_IN"
   assert_port "$ENV_VAR_NFS_PORT_STATD_OUT"
   assert_nfs_version
-  assert_disabled_nfs3
   assert_nfsd_threads
 
   # check kernel modules
   assert_kernel_mod nfs
   assert_kernel_mod nfsd
 
-  # ensure /etc/exports has at least one line
-  grep -Evq '^\s*#|^\s*$' $PATH_FILE_ETC_EXPORTS
-  exit_on_failure "$PATH_FILE_ETC_EXPORTS has no exports"
+  # make sure we have at least one export
+  assert_at_least_one_export
 
   # ensure we have CAP_SYS_ADMIN
-  capsh --print | grep -Eq "^Current: = .*,?cap_sys_admin(,|$)"
-  exit_on_failure 'missing CAP_SYS_ADMIN. be sure to run Docker with --cap-add SYS_ADMIN or --privileged'
+  assert_linux_capabilities
 
   # perform Kerberos assertions
-  assert_kerberos_requirements
+  if [[ -n "$(is_kerberos_enabled)" ]]; then
+
+    assert_file_provided "$PATH_FILE_ETC_IDMAPD_CONF"
+    assert_file_provided "$PATH_FILE_ETC_KRB5_KEYTAB"
+    assert_file_provided "$PATH_FILE_ETC_KRB5_CONF"
+
+    assert_kernel_mod rpcsec_gss_krb5
+  fi
 }
 
 
@@ -395,27 +426,25 @@ boot_helper_mount() {
   local -r type=$(basename "$path")
   local -r args=('-vt' "$type" "$path")
 
-  log "mounting $type onto $path"
+  log "mounting $type filesystem onto $path"
   mount "${args[@]}"
-  stop_on_failure "unable to mount $type onto $path"
+  on_failure stop "unable to mount $type filesystem onto $path"
 }
 
 boot_helper_get_version_flags() {
 
-  local versionFlags
-  local -r requestedVersion="$(get_reqd_nfs_version)"
-
-  versionFlags=('--nfs-version' "$requestedVersion" '--no-nfs-version' 2)
+  local -r reqd_version="$(get_reqd_nfs_version)"
+  local flags=('--nfs-version' "$reqd_version" '--no-nfs-version' 2)
 
   if [[ -z "$(is_nfs3_enabled)" ]]; then
-    versionFlags+=('--no-nfs-version' 3)
+    flags+=('--no-nfs-version' 3)
   fi
 
-  if [[ "$requestedVersion" == '3' ]]; then
-    versionFlags+=('--no-nfs-version' 4)
+  if [[ "$reqd_version" == '3' ]]; then
+    flags+=('--no-nfs-version' 4)
   fi
 
-  echo "${versionFlags[@]}"
+  echo "${flags[@]}"
 }
 
 
@@ -432,23 +461,22 @@ boot_main_mounts() {
 
 boot_main_exportfs() {
 
-  log 'exporting filesystems'
+  log 'exporting filesystem(s)'
   $PATH_BIN_EXPORTFS -arv
-  stop_on_failure 'exportfs failed'
+  on_failure stop 'exportfs failed'
 }
 
 boot_main_mountd() {
 
-  local versionFlags
-  read -r -a versionFlags <<< "$(boot_helper_get_version_flags)"
+  local version_flags
+  read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
   local -r port=$(get_reqd_mountd_port)
-  local -r version=$(get_reqd_nfs_version)
-  local -r args=('--debug' 'all' '--port' "$port" "${versionFlags[@]}")
+  local -r args=('--debug' 'all' '--port' "$port" "${version_flags[@]}")
 
   # yes, rpc.mountd is required even for NFS v4: https://forums.gentoo.org/viewtopic-p-7724856.html#7724856
-  log "starting rpc.mountd for NFS version $version on port $port"
+  log "starting rpc.mountd on port $port"
   $PATH_BIN_MOUNTD "${args[@]}"
-  stop_on_failure 'rpc.mountd failed'
+  on_failure stop 'rpc.mountd failed'
 }
 
 boot_main_rpcbind() {
@@ -458,7 +486,7 @@ boot_main_rpcbind() {
   # so as a workaround we start rpcbind now and (in v4-only scenarios) kill it after nfsd starts up
   log 'starting rpcbind'
   $PATH_BIN_RPCBIND -ds
-  stop_on_failure 'rpcbind failed'
+  on_failure stop 'rpcbind failed'
 }
 
 boot_main_idmapd() {
@@ -466,7 +494,7 @@ boot_main_idmapd() {
   if [[ "$(get_reqd_nfs_version)" != '3' && -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
     log 'starting idmapd'
     $PATH_BIN_IDMAPD -v -S
-    stop_on_failure 'idmapd failed'
+    on_failure stop 'idmapd failed'
   fi
 }
 
@@ -476,27 +504,26 @@ boot_main_statd() {
     return
   fi
 
-  local -r inPort=$(get_reqd_statd_in_port)
-  local -r outPort=$(get_reqd_statd_out_port)
-  local -r args=('--no-notify' '--port' "$inPort" '--outgoing-port' "$outPort")
+  local -r port_in=$(get_reqd_statd_in_port)
+  local -r port_out=$(get_reqd_statd_out_port)
+  local -r args=('--no-notify' '--port' "$port_in" '--outgoing-port' "$port_out")
 
-  log "starting statd on port $inPort (outgoing connections on port $outPort)"
+  log "starting statd on port $port_in (outgoing connections from port $port_out)"
   $PATH_BIN_STATD "${args[@]}"
-  stop_on_failure 'statd failed'
+  on_failure stop 'statd failed'
 }
 
 boot_main_nfsd() {
 
-  local versionFlags
-  read -r -a versionFlags <<< "$(boot_helper_get_version_flags)"
+  local version_flags
+  read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
   local -r threads=$(get_reqd_nfsd_threads)
   local -r port=$(get_reqd_nfsd_port)
-  local -r version=$(get_reqd_nfs_version)
-  local -r args=('--debug' 8 '--port' "$port" "${versionFlags[@]}" "$threads")
+  local -r args=('--debug' 8 '--port' "$port" "${version_flags[@]}" "$threads")
 
-  log "starting rpc.nfsd on port $port with version $version and $threads server thread(s)"
+  log "starting rpc.nfsd on port $port with $threads server thread(s)"
   $PATH_BIN_NFSD "${args[@]}"
-  stop_on_failure 'rpc.nfsd failed'
+  on_failure stop 'rpc.nfsd failed'
 
   if [ -z "$(is_nfs3_enabled)" ]; then
     kill_process_if_running "$PATH_BIN_RPCBIND"
@@ -511,14 +538,71 @@ boot_main_svcgssd() {
 
   log 'starting rpc.svcgssd'
   $PATH_BIN_RPC_SVCGSSD -f &
-  stop_on_failure 'rpc.svcgssd failed'
+  on_failure stop 'rpc.svcgssd failed'
 }
 
-boot_main_print_ready_message() {
 
-  logHeader "ready and waiting for connections on port $(get_reqd_nfsd_port)"
-  log 'list of exports:'
-  cat $PATH_FILE_ETC_EXPORTS
+######################################################################################
+### boot summary
+######################################################################################
+
+summarize_nfs_versions() {
+
+  local -r reqd_version="$(get_reqd_nfs_version)"
+  local versions=''
+
+  case "$reqd_version" in
+    4\.2)
+      versions='4.2, 4.1, 4'
+      ;;
+    4\.1)
+      versions='4.1, 4'
+      ;;
+    4)
+      versions='4'
+      ;;
+    *)
+      versions='3'
+      ;;
+  esac
+
+  if [[ -n "$(is_nfs3_enabled)" && "$reqd_version" =~ ^4 ]]; then
+    versions="$versions, 3"
+  fi
+
+  log "list of enabled NFS protocol versions: $versions"
+}
+
+summarize_exports() {
+
+  log 'list of container exports:'
+
+  while read -r export; do
+
+    # skip comments and empty lines
+    if [[ "$export" =~ $REGEX_EXPORTS_LINES_TO_SKIP ]]; then
+      continue;
+    fi
+
+    # log it w/out leading and trailing whitespace
+    log "  $(echo -e "$export" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+  done < "$PATH_FILE_ETC_EXPORTS"
+}
+
+summarize_ports() {
+
+  local -r port_nfsd="$(get_reqd_nfsd_port)"
+
+  if [[ -z "$(is_nfs3_enabled)" ]]; then
+    log "list of container ports that should be exposed: $port_nfsd (TCP)"
+  else
+    log 'list of container ports that should be exposed:'
+    log '  111 (TCP and UDP)'
+    log "  $port_nfsd (TCP and UDP)"
+    log "  $(get_reqd_statd_in_port) (TCP and UDP)"
+    log "  $(get_reqd_mountd_port) (TCP and UDP)"
+  fi
 }
 
 
@@ -528,18 +612,18 @@ boot_main_print_ready_message() {
 
 init() {
 
-  logHeader 'setting up'
+  log_header 'setting up'
 
-  init_trap
   init_exports
   init_assertions
+  init_trap
 
   log 'setup complete'
 }
 
 boot() {
 
-  logHeader 'starting services'
+  log_header 'starting services'
 
   boot_main_mounts
   boot_main_rpcbind
@@ -549,10 +633,22 @@ boot() {
   boot_main_idmapd
   boot_main_nfsd
   boot_main_svcgssd
-  boot_main_print_ready_message
+
+  log 'all services started normally'
+}
+
+summarize() {
+
+  log_header 'server startup complete'
+
+  summarize_nfs_versions
+  summarize_exports
+  summarize_ports
 }
 
 hangout() {
+
+  log_header 'ready and waiting for NFS client connections'
 
   # wait forever or until we get SIGTERM or SIGINT
   # https://stackoverflow.com/a/41655546/229920
@@ -564,6 +660,7 @@ main() {
 
   init
   boot
+  summarize
   hangout
 }
 
