@@ -257,22 +257,22 @@ assert_file_provided() {
 
 assert_kernel_mod() {
 
-  local -r moduleName=$1
+  local -r module=$1
 
-  log "checking for presence of kernel module: $moduleName"
+  log "checking for presence of kernel module: $module"
 
-  lsmod | grep -Eq "^$moduleName\\s+" || [ -d "/sys/module/$moduleName" ]
+  lsmod | grep -Eq "^$module\\s+" || [ -d "/sys/module/$module" ]
 
-  on_failure bail "$moduleName module is not loaded in the Docker host's kernel (try: modprobe $moduleName)"
+  on_failure bail "$module module is not loaded in the Docker host's kernel (try: modprobe $module)"
 }
 
 assert_port() {
 
-  local -r envName=$1
-  local -r value=${!envName}
+  local -r variable_name=$1
+  local -r value=${!variable_name}
 
   if [[ -n "$value" && ( "$value" -lt 1 || "$value" -gt 65535 ) ]]; then
-    bail "please set $1 to an integer between 1 and 65535 inclusive"
+    bail "please set $variable_name to an integer between 1 and 65535 inclusive"
   fi
 }
 
@@ -291,9 +291,9 @@ assert_disabled_nfs3() {
 
 assert_nfsd_threads() {
 
-  local -r requested=$(get_reqd_nfsd_threads)
+  local -r reqd_thread_count=$(get_reqd_nfsd_threads)
 
-  if [[ "$requested" -lt 1 ]]; then
+  if [[ "$reqd_thread_count" -lt 1 ]]; then
     bail "please set $ENV_VAR_NFS_SERVER_THREAD_COUNT to a positive integer"
   fi
 }
@@ -334,46 +334,47 @@ init_exports() {
     return
   fi
 
-  local collected=0
+  local count_valid_exports=0
   local exports=''
-  local candidateExportVariables
+  local candidate_export_vars
+  local candidate_export_var
 
-  candidateExportVariables=$(compgen -A variable | grep -E 'NFS_EXPORT_[0-9]+' | sort)
+  candidate_export_vars=$(compgen -A variable | grep -E 'NFS_EXPORT_[0-9]+' | sort)
   on_failure bail 'failed to detect NFS_EXPORT_* variables'
 
-  if [[ -z "$candidateExportVariables" ]]; then
+  if [[ -z "$candidate_export_vars" ]]; then
     bail "please provide $PATH_FILE_ETC_EXPORTS to the container or set at least one NFS_EXPORT_* environment variable"
   fi
 
   log "building $PATH_FILE_ETC_EXPORTS from environment variables"
 
-  for exportVariable in $candidateExportVariables; do
+  for candidate_export_var in $candidate_export_vars; do
 
-    local line=${!exportVariable}
-    local lineAsArray
-    read -r -a lineAsArray <<< "$line"
-    local dir="${lineAsArray[0]}"
+    local line=${!candidate_export_var}
+    local line_as_array
+    read -r -a line_as_array <<< "$line"
+    local dir="${line_as_array[0]}"
 
     if [[ ! -d "$dir" ]]; then
-      log_warning "skipping $exportVariable since $dir is not a container directory"
+      log_warning "skipping $candidate_export_var since $dir is not a container directory"
       continue
     fi
 
     log "will export $line"
 
-    if [[ $collected -gt 0 ]]; then
+    if [[ $count_valid_exports -gt 0 ]]; then
       exports=$exports$'\n'
     fi
 
     exports=$exports$line
 
-    (( collected++ ))
+    (( count_valid_exports++ ))
 
   done
 
-  log "collected $collected valid export(s) from NFS_EXPORT_* environment variables"
+  log "collected $count_valid_exports valid export(s) from NFS_EXPORT_* environment variables"
 
-  if [[ $collected -eq 0 ]]; then
+  if [[ $count_valid_exports -eq 0 ]]; then
     bail 'no valid exports'
   fi
 
@@ -426,18 +427,18 @@ boot_helper_mount() {
 
 boot_helper_get_version_flags() {
 
-  local -r requestedVersion="$(get_reqd_nfs_version)"
-  local versionFlags=('--nfs-version' "$requestedVersion" '--no-nfs-version' 2)
+  local -r reqd_version="$(get_reqd_nfs_version)"
+  local flags=('--nfs-version' "$reqd_version" '--no-nfs-version' 2)
 
   if [[ -z "$(is_nfs3_enabled)" ]]; then
-    versionFlags+=('--no-nfs-version' 3)
+    flags+=('--no-nfs-version' 3)
   fi
 
-  if [[ "$requestedVersion" == '3' ]]; then
-    versionFlags+=('--no-nfs-version' 4)
+  if [[ "$reqd_version" == '3' ]]; then
+    flags+=('--no-nfs-version' 4)
   fi
 
-  echo "${versionFlags[@]}"
+  echo "${flags[@]}"
 }
 
 
@@ -461,10 +462,10 @@ boot_main_exportfs() {
 
 boot_main_mountd() {
 
-  local versionFlags
-  read -r -a versionFlags <<< "$(boot_helper_get_version_flags)"
+  local version_flags
+  read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
   local -r port=$(get_reqd_mountd_port)
-  local -r args=('--debug' 'all' '--port' "$port" "${versionFlags[@]}")
+  local -r args=('--debug' 'all' '--port' "$port" "${version_flags[@]}")
 
   # yes, rpc.mountd is required even for NFS v4: https://forums.gentoo.org/viewtopic-p-7724856.html#7724856
   log "starting rpc.mountd on port $port"
@@ -497,22 +498,22 @@ boot_main_statd() {
     return
   fi
 
-  local -r inPort=$(get_reqd_statd_in_port)
-  local -r outPort=$(get_reqd_statd_out_port)
-  local -r args=('--no-notify' '--port' "$inPort" '--outgoing-port' "$outPort")
+  local -r port_in=$(get_reqd_statd_in_port)
+  local -r port_out=$(get_reqd_statd_out_port)
+  local -r args=('--no-notify' '--port' "$port_in" '--outgoing-port' "$port_out")
 
-  log "starting statd on port $inPort (outgoing connections from port $outPort)"
+  log "starting statd on port $port_in (outgoing connections from port $port_out)"
   $PATH_BIN_STATD "${args[@]}"
   on_failure stop 'statd failed'
 }
 
 boot_main_nfsd() {
 
-  local versionFlags
-  read -r -a versionFlags <<< "$(boot_helper_get_version_flags)"
+  local version_flags
+  read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
   local -r threads=$(get_reqd_nfsd_threads)
   local -r port=$(get_reqd_nfsd_port)
-  local -r args=('--debug' 8 '--port' "$port" "${versionFlags[@]}" "$threads")
+  local -r args=('--debug' 8 '--port' "$port" "${version_flags[@]}" "$threads")
 
   log "starting rpc.nfsd on port $port with $threads server thread(s)"
   $PATH_BIN_NFSD "${args[@]}"
@@ -577,14 +578,14 @@ summarize_exports() {
 
 summarize_ports() {
 
-  local -r nfsdPort="$(get_reqd_nfsd_port)"
+  local -r port_nfsd="$(get_reqd_nfsd_port)"
 
   if [[ -z "$(is_nfs3_enabled)" ]]; then
-    log "list of container ports that should be exposed: $nfsdPort (TCP)"
+    log "list of container ports that should be exposed: $port_nfsd (TCP)"
   else
     log 'list of container ports that should be exposed:'
     log '  111 (TCP and UDP)'
-    log "  $nfsdPort (TCP and UDP)"
+    log "  $port_nfsd (TCP and UDP)"
     log "  $(get_reqd_statd_in_port) (TCP and UDP)"
     log "  $(get_reqd_mountd_port) (TCP and UDP)"
   fi
