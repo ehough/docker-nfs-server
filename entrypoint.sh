@@ -82,8 +82,7 @@ log_error() {
 
 log_header() {
 
-  echo "\
-
+  echo "
 ==================================================================
       $(echo "$1" | awk '{print toupper($0)}')
 =================================================================="
@@ -169,7 +168,7 @@ stop_nfsd() {
 stop_exportfs() {
 
   log 'un-exporting filesystem(s)'
-  $PATH_BIN_EXPORTFS -ua
+  $PATH_BIN_EXPORTFS -uav
   on_failure warn 'unable to un-export filesystem(s)'
 }
 
@@ -177,10 +176,20 @@ stop() {
 
   log_header 'terminating ...'
 
-  kill_process_if_running "$PATH_BIN_RPC_SVCGSSD"
+  if is_kerberos_enabled; then
+    kill_process_if_running "$PATH_BIN_RPC_SVCGSSD"
+  fi
+
   stop_nfsd
-  kill_process_if_running "$PATH_BIN_IDMAPD"
-  kill_process_if_running "$PATH_BIN_STATD"
+
+  if is_idmapd_enabled; then
+    kill_process_if_running "$PATH_BIN_IDMAPD"
+  fi
+
+  if is_nfs3_enabled; then
+    kill_process_if_running "$PATH_BIN_STATD"
+  fi
+
   kill_process_if_running "$PATH_BIN_MOUNTD"
   stop_exportfs
   kill_process_if_running "$PATH_BIN_RPCBIND"
@@ -230,15 +239,28 @@ get_requested_port_statd_out() {
 is_kerberos_enabled() {
 
   if [[ -n "${!ENV_VAR_NFS_ENABLE_KERBEROS}" ]]; then
-    echo 1
+    return 0
   fi
+
+  return 1
 }
 
 is_nfs3_enabled() {
 
   if [[ -z "${!ENV_VAR_NFS_DISABLE_VERSION_3}" ]]; then
-    echo 1
+    return 0
   fi
+
+  return 1
+}
+
+is_idmapd_enabled() {
+
+  if [[ "$(get_requested_nfs_version)" != '3' && -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
+    return 0
+  fi
+
+  return 1
 }
 
 
@@ -276,21 +298,19 @@ assert_port() {
 
 assert_nfs_version() {
 
-  local -r version="$(get_requested_nfs_version)"
+  local -r requested_version="$(get_requested_nfs_version)"
 
-  echo "$version" | grep -Eq '^(3|4|4\.1|4\.2)$'
+  echo "$requested_version" | grep -Eq '^3|4(?:\.[1-2])?$'
   on_failure bail "please set $ENV_VAR_NFS_VERSION to one of: 4.2, 4.1, 4, 3"
 
-  if [[ -z "$(is_nfs3_enabled)" && "$version" = '3' ]]; then
+  if [[ ( ! $(is_nfs3_enabled) ) && "$requested_version" = '3' ]]; then
     bail 'you cannot simultaneously enable and disable NFS version 3'
   fi
 }
 
 assert_nfsd_threads() {
 
-  local -r reqd_thread_count=$(get_requested_count_nfsd_threads)
-
-  if [[ "$reqd_thread_count" -lt 1 ]]; then
+  if [[ "$(get_requested_count_nfsd_threads)" -lt 1 ]]; then
     bail "please set $ENV_VAR_NFS_SERVER_THREAD_COUNT to a positive integer"
   fi
 }
@@ -407,7 +427,7 @@ init_assertions() {
   assert_linux_capabilities
 
   # perform Kerberos assertions
-  if [[ -n "$(is_kerberos_enabled)" ]]; then
+  if is_kerberos_enabled; then
 
     assert_file_provided "$PATH_FILE_ETC_IDMAPD_CONF"
     assert_file_provided "$PATH_FILE_ETC_KRB5_KEYTAB"
@@ -435,14 +455,14 @@ boot_helper_mount() {
 
 boot_helper_get_version_flags() {
 
-  local -r reqd_version="$(get_requested_nfs_version)"
-  local flags=('--nfs-version' "$reqd_version" '--no-nfs-version' 2)
+  local -r requested_version="$(get_requested_nfs_version)"
+  local flags=('--nfs-version' "$requested_version" '--no-nfs-version' 2)
 
-  if [[ -z "$(is_nfs3_enabled)" ]]; then
+  if ! is_nfs3_enabled; then
     flags+=('--no-nfs-version' 3)
   fi
 
-  if [[ "$reqd_version" = '3' ]]; then
+  if [[ "$requested_version" = '3' ]]; then
     flags+=('--no-nfs-version' 4)
   fi
 
@@ -493,7 +513,7 @@ boot_main_rpcbind() {
 
 boot_main_idmapd() {
 
-  if [[ "$(get_requested_nfs_version)" != '3' && -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
+  if is_idmapd_enabled; then
     log 'starting idmapd'
     $PATH_BIN_IDMAPD -v -S
     on_failure stop 'idmapd failed'
@@ -502,7 +522,7 @@ boot_main_idmapd() {
 
 boot_main_statd() {
 
-  if [[ -z "$(is_nfs3_enabled)" ]]; then
+  if ! is_nfs3_enabled; then
     return
   fi
 
@@ -527,14 +547,14 @@ boot_main_nfsd() {
   $PATH_BIN_NFSD "${args[@]}"
   on_failure stop 'rpc.nfsd failed'
 
-  if [ -z "$(is_nfs3_enabled)" ]; then
+  if ! is_nfs3_enabled; then
     kill_process_if_running "$PATH_BIN_RPCBIND"
   fi
 }
 
 boot_main_svcgssd() {
 
-  if [[ -z "$(is_kerberos_enabled)" ]]; then
+  if ! is_kerberos_enabled; then
     return
   fi
 
@@ -568,7 +588,7 @@ summarize_nfs_versions() {
       ;;
   esac
 
-  if [[ -n "$(is_nfs3_enabled)" && "$reqd_version" =~ ^4 ]]; then
+  if [[ $(is_nfs3_enabled) && "$reqd_version" =~ ^4 ]]; then
     versions="$versions, 3"
   fi
 
@@ -598,7 +618,7 @@ summarize_ports() {
   local -r port_mountd="$(get_requested_port_mountd)"
   local -r port_statd_in="$(get_requested_port_statd_in)"
 
-  if [[ -z "$(is_nfs3_enabled)" ]]; then
+  if ! is_nfs3_enabled; then
     log "list of container ports that should be exposed: $port_nfsd (TCP)"
   else
     log 'list of container ports that should be exposed:'
