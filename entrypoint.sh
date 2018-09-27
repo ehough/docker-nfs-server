@@ -300,7 +300,7 @@ assert_nfs_version() {
 
   local -r requested_version="$(get_requested_nfs_version)"
 
-  echo "$requested_version" | grep -Eq '^3|4(?:\.[1-2])?$'
+  echo "$requested_version" | grep -Eq '^3|4(\.[1-2])?$'
   on_failure bail "please set $ENV_VAR_NFS_VERSION to one of: 4.2, 4.1, 4, 3"
 
   if [[ ( ! $(is_nfs3_enabled) ) && "$requested_version" = '3' ]]; then
@@ -636,7 +636,7 @@ summarize_ports() {
 
 init() {
 
-  log_header 'setting up'
+  log_header 'setting up ...'
 
   init_exports
   init_assertions
@@ -647,7 +647,7 @@ init() {
 
 boot() {
 
-  log_header 'starting services'
+  log_header 'starting services ...'
 
   boot_main_mounts
   boot_main_rpcbind
