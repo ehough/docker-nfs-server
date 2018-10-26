@@ -1,17 +1,9 @@
-# Alpine can only be used if/when this bug is fixed: https://bugs.alpinelinux.org/issues/8470
-ARG BUILD_FROM=debian:stretch-slim
+ARG BUILD_FROM=alpine:latest
 
 FROM $BUILD_FROM
 
-# https://github.com/ehough/docker-nfs-server/pull/3#issuecomment-387880692
-ARG DEBIAN_FRONTEND=noninteractive
-
-# kmod is needed for lsmod, and libcap2-bin is needed for confirming Linux capabilities
-RUN apt-get update                                                                && \
-    apt-get install -y --no-install-recommends nfs-kernel-server kmod libcap2-bin && \
-    apt-get clean                                                                 && \
-    rm -rf /var/lib/apt/lists                                                     && \
-                                                                                     \
+RUN apk --update --no-cache add bash nfs-utils && \
+                                                  \
     # remove the default config files
     rm -v /etc/idmapd.conf /etc/exports
 

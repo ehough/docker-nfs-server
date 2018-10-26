@@ -7,6 +7,7 @@ A lightweight, robust, flexible, and containerized NFS server.
 This is the only containerized NFS server that offers **all** of the following features:
 
 - NFS versions 3, 4, or both simultaneously
+- small (< 15MB) Alpine Linux image
 - clean teardown of services upon termination (no lingering `nfsd` processes on Docker host)
 - flexible construction of `/etc/exports`
 - extensive server configuration via environment variables
@@ -153,7 +154,6 @@ Please [open an issue](https://github.com/ehough/docker-nfs-server/issues) if yo
 
 ## Remaining tasks
 
-- switch to Alpine Linux once `nfs-utils` version 2.3.1-r4 (or higher) is released in a stable repo (maybe Alpine 3.9?). See [this bug](https://bugs.alpinelinux.org/issues/8470) for details
 - figure out why `rpc.nfsd` takes 5 minutes to startup/timeout unless `rpcbind` is running
 - add more examples, including Docker Compose
 
