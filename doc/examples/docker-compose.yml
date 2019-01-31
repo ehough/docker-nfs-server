@@ -7,7 +7,8 @@ services:
       dockerfile: Dockerfile
     image: "erichough/nfs-server"
     container_name: "nfs-server"
-    privileged: true
+    cap_add:
+      - SYS_ADMIN
     ports:
     - "2049:2049"
     volumes:
