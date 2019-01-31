@@ -69,3 +69,20 @@ Inspect mounted directory content:
     ├── c
     └── d
 ```
+
+## Possible issues
+
+In case of the:
+
+```
+nfs-server    | ==================================================================
+nfs-server    |       STARTING SERVICES ...
+nfs-server    | ==================================================================
+nfs-server    | ----> mounting rpc_pipefs filesystem onto /var/lib/nfs/rpc_pipefs
+nfs-server    | mount: mounting rpc_pipefs on /var/lib/nfs/rpc_pipefs failed: Permission denied
+nfs-server    | ---->
+nfs-server    | ----> ERROR: unable to mount rpc_pipefs filesystem onto /var/lib/nfs/rpc_pipefs
+nfs-server    | ---->
+```
+
+Please refer to the [apparmor document](../feature/apparmor.md#apparmor).
