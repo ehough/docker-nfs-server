@@ -303,7 +303,7 @@ assert_nfs_version() {
   echo "$requested_version" | grep -Eq '^3|4(\.[1-2])?$'
   on_failure bail "please set $ENV_VAR_NFS_VERSION to one of: 4.2, 4.1, 4, 3"
 
-  if [[ ( ! $(is_nfs3_enabled) ) && "$requested_version" = '3' ]]; then
+  if [[ ( ! is_nfs3_enabled ) && "$requested_version" = '3' ]]; then
     bail 'you cannot simultaneously enable and disable NFS version 3'
   fi
 }
@@ -541,7 +541,7 @@ boot_main_nfsd() {
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
   local -r threads=$(get_requested_count_nfsd_threads)
   local -r port=$(get_requested_port_nfsd)
-  local -r args=('--debug' 8 '--port' "$port" "${version_flags[@]}" "$threads")
+  local -r args=('--debug' 8 '--tcp' '--udp' '--port' "$port" "${version_flags[@]}" "$threads")
 
   log "starting rpc.nfsd on port $port with $threads server thread(s)"
   $PATH_BIN_NFSD "${args[@]}"
@@ -588,7 +588,7 @@ summarize_nfs_versions() {
       ;;
   esac
 
-  if [[ $(is_nfs3_enabled) && "$reqd_version" =~ ^4 ]]; then
+  if [[ is_nfs3_enabled && "$reqd_version" =~ ^4 ]]; then
     versions="$versions, 3"
   fi
 
