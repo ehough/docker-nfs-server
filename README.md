@@ -28,6 +28,7 @@ This is the only containerized NFS server that offers **all** of the following f
   * [NFSv4 user ID mapping](doc/feature/nfsv4-user-id-mapping.md)
   * [AppArmor integration](doc/feature/apparmor.md)
 * Advanced
+  * [automatically load required kernel modules](doc/feature/auto-load-kernel-modules.md)
   * [custom server ports](doc/advanced/ports.md)
   * [custom NFS versions offered](doc/advanced/nfs-versions.md)
   * [performance tuning](doc/advanced/performance-tuning.md)
@@ -42,7 +43,11 @@ This is the only containerized NFS server that offers **all** of the following f
    - `nfsd`
    - `rpcsec_gss_krb5` (*only if Kerberos is used*)
 
-   Usually you can enable these modules with: `modprobe {nfs,nfsd,rpcsec_gss_krb5}`
+   You can manually enable these modules on the Docker host with:
+   
+   `modprobe {nfs,nfsd,rpcsec_gss_krb5}`
+   
+   or you can just allow the container to [load them automatically](doc/feature/auto-load-kernel-modules.md).
 1. The container will need to run with `CAP_SYS_ADMIN` (or `--privileged`). This is necessary as the server needs to mount several filesystems *inside* the container to support its operation, and performing mounts from inside a container is impossible without these capabilities.
 1. The container will need local access to the files you'd like to serve via NFS. You can use Docker volumes, bind mounts, files baked into a custom image, or virtually any other means of supplying files to a Docker container.
 
@@ -145,6 +150,7 @@ If you pay close attention to each of the items in this section, the server shou
 
 ## Advanced
 
+  * [automatically load required kernel modules](doc/feature/auto-load-kernel-modules.md)
   * [customizing which ports are used](doc/advanced/ports.md)
   * [customizing NFS versions offered](doc/advanced/nfs-versions.md)
   * [performance tuning](doc/advanced/performance-tuning.md)
