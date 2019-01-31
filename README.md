@@ -148,6 +148,10 @@ If you pay close attention to each of the items in this section, the server shou
   * [customizing NFS versions offered](doc/advanced/nfs-versions.md)
   * [performance tuning](doc/advanced/performance-tuning.md)
 
+## Examples
+
+  * [docker-compose](doc/examples/docker-compose.md)
+
 ## Help!
 
 Please [open an issue](https://github.com/ehough/docker-nfs-server/issues) if you have any questions, constructive criticism, or can't get something to work.

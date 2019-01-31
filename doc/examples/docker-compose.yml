@@ -1,0 +1,18 @@
+version: '3'
+
+services:
+  nfs-server:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    image: "erichough/nfs-server"
+    container_name: "nfs-server"
+    privileged: true
+    ports:
+    - "2049:2049"
+    volumes:
+      - "$PWD/exports.txt:/etc/exports:ro"
+      - "$PWD/nfs-export:/export"
+    environment:
+      NFS_VERSION: 4.2
+      NFS_DISABLE_VERSION_3: 1
