@@ -11,6 +11,7 @@ This is the only containerized NFS server that offers **all** of the following f
 - clean teardown of services upon termination (no lingering `nfsd` processes on Docker host)
 - flexible construction of `/etc/exports`
 - extensive server configuration via environment variables
+- helpful, human-readable logging
 - *optional* bonus features
   - [Kerberos security](doc/feature/kerberos.md)
   - [NFSv4 user ID mapping](doc/feature/nfs4-user-id-mapping.md) via [`idmapd`](http://man7.org/linux/man-pages/man8/idmapd.8.html)
