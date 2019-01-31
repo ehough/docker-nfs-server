@@ -263,6 +263,27 @@ is_idmapd_enabled() {
   return 1
 }
 
+is_kernel_module_loaded() {
+
+  local -r module=$1
+
+  if lsmod | grep -Eq "^$module\\s+" || [[ -d "/sys/module/$module" ]]; then
+    log "kernel module $module is loaded"
+    return 0
+  fi
+
+  log "kernel module $module is missing"
+  return 1
+}
+
+has_linux_capability() {
+
+  if capsh --print | grep -Eq "^Current: = .*,?${1}(,|$)"; then
+    return 0
+  fi
+
+  return 1
+}
 
 ######################################################################################
 ### runtime configuration assertions
@@ -279,11 +300,21 @@ assert_kernel_mod() {
 
   local -r module=$1
 
-  log "checking for presence of kernel module: $module"
+  if is_kernel_module_loaded "$module"; then
+    return
+  fi
 
-  lsmod | grep -Eq "^$module\\s+" || [ -d "/sys/module/$module" ]
+  if [[ ! -d /lib/modules ]] || ! has_linux_capability 'sys_module'; then
+    bail "$module module is not loaded in the Docker host's kernel (try: modprobe $module)"
+  fi
 
-  on_failure bail "$module module is not loaded in the Docker host's kernel (try: modprobe $module)"
+  log "attempting to load kernel module $module"
+  modprobe -v "$module"
+  on_failure bail "unable to dynamically load kernel module $module. try modproble $module on the Docker host"
+
+  if ! is_kernel_module_loaded "$module"; then
+    bail "modprobe claims that it loaded kernel module $module, but it still appears to be missing"
+  fi
 }
 
 assert_port() {
@@ -303,7 +334,7 @@ assert_nfs_version() {
   echo "$requested_version" | grep -Eq '^3|4(\.[1-2])?$'
   on_failure bail "please set $ENV_VAR_NFS_VERSION to one of: 4.2, 4.1, 4, 3"
 
-  if [[ ( ! is_nfs3_enabled ) && "$requested_version" = '3' ]]; then
+  if ! is_nfs3_enabled && [[ "$requested_version" = '3' ]]; then
     bail 'you cannot simultaneously enable and disable NFS version 3'
   fi
 }
@@ -322,10 +353,11 @@ assert_at_least_one_export() {
   on_failure bail "$PATH_FILE_ETC_EXPORTS has no exports"
 }
 
-assert_linux_capabilities() {
+assert_cap_sysadmin() {
 
-  capsh --print | grep -Eq "^Current: = .*,?cap_sys_admin(,|$)"
-  on_failure bail 'missing CAP_SYS_ADMIN. be sure to run this image with --cap-add SYS_ADMIN or --privileged'
+  if ! has_linux_capability 'cap_sys_admin'; then
+    bail 'missing CAP_SYS_ADMIN. be sure to run this image with --cap-add SYS_ADMIN or --privileged'
+  fi
 }
 
 
@@ -424,7 +456,7 @@ init_assertions() {
   assert_at_least_one_export
 
   # ensure we have CAP_SYS_ADMIN
-  assert_linux_capabilities
+  assert_cap_sysadmin
 
   # perform Kerberos assertions
   if is_kerberos_enabled; then
@@ -588,7 +620,7 @@ summarize_nfs_versions() {
       ;;
   esac
 
-  if [[ is_nfs3_enabled && "$reqd_version" =~ ^4 ]]; then
+  if is_nfs3_enabled && [[ "$reqd_version" =~ ^4 ]]; then
     versions="$versions, 3"
   fi
 
