@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2019-10-31
+### Added
+* Ability to automatically load kernel modules. ([#18](https://github.com/ehough/docker-nfs-server/issues/18)). Credit to [@andyneff](https://github.com/andyneff).
+### Fixed
+* Minor bugs in `entrypoint.sh`
+
 ## [2.0.0] - 2019-01-31
 
 ### Changed
