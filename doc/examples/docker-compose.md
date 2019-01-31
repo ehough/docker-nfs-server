@@ -8,7 +8,7 @@ The example provided [docker-compose file](docker-compose.yml) allows for:
   in the
   [customize NFS versions](../advanced/nfs-versions.md#customize-nfs-versions-offered)
 
-Following stuff gets mounted into the contianer:
+Following stuff gets mounted into the container:
 
 * `nfs-export` directory:
 
