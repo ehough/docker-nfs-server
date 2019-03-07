@@ -5,7 +5,7 @@
 # https://hub.docker.com/r/erichough/nfs-server
 # https://github.com/ehough/docker-nfs-server
 #
-# Copyright (C) 2017-2018  Eric D. Hough
+# Copyright (C) 2017-2019  Eric D. Hough
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -461,7 +461,6 @@ init_assertions() {
   # perform Kerberos assertions
   if is_kerberos_enabled; then
 
-    assert_file_provided "$PATH_FILE_ETC_IDMAPD_CONF"
     assert_file_provided "$PATH_FILE_ETC_KRB5_KEYTAB"
     assert_file_provided "$PATH_FILE_ETC_KRB5_CONF"
 
