@@ -176,13 +176,13 @@ stop() {
 
   log_header 'terminating ...'
 
-  if is_kerberos_enabled; then
+  if is_kerberos_requested; then
     kill_process_if_running "$PATH_BIN_RPC_SVCGSSD"
   fi
 
   stop_nfsd
 
-  if is_idmapd_enabled; then
+  if is_idmapd_requested; then
     kill_process_if_running "$PATH_BIN_IDMAPD"
   fi
 
@@ -236,7 +236,7 @@ get_requested_port_statd_out() {
   echo "${!ENV_VAR_NFS_PORT_STATD_OUT:-$DEFAULT_NFS_PORT_STATD_OUT}"
 }
 
-is_kerberos_enabled() {
+is_kerberos_requested() {
 
   if [[ -n "${!ENV_VAR_NFS_ENABLE_KERBEROS}" ]]; then
     return 0
@@ -254,7 +254,7 @@ is_nfs3_enabled() {
   return 1
 }
 
-is_idmapd_enabled() {
+is_idmapd_requested() {
 
   if [[ -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
     return 0
@@ -459,7 +459,7 @@ init_assertions() {
   assert_cap_sysadmin
 
   # perform Kerberos assertions
-  if is_kerberos_enabled; then
+  if is_kerberos_requested; then
 
     assert_file_provided "$PATH_FILE_ETC_KRB5_KEYTAB"
     assert_file_provided "$PATH_FILE_ETC_KRB5_CONF"
@@ -544,7 +544,7 @@ boot_main_rpcbind() {
 
 boot_main_idmapd() {
 
-  if is_idmapd_enabled; then
+  if is_idmapd_requested; then
     log 'starting idmapd'
     $PATH_BIN_IDMAPD -v -S
     on_failure stop 'idmapd failed'
@@ -585,7 +585,7 @@ boot_main_nfsd() {
 
 boot_main_svcgssd() {
 
-  if ! is_kerberos_enabled; then
+  if ! is_kerberos_requested; then
     return
   fi
 
