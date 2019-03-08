@@ -16,7 +16,7 @@ services:
     image: erichough/nfs-server
     ...
     environment:
-      - LOG_LEVEL: DEBUG
+      - NFS_LOG_LEVEL: DEBUG
 ```
    
 ### Normal log output
