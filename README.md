@@ -11,7 +11,7 @@ This is the only containerized NFS server that offers **all** of the following f
 - clean teardown of services upon termination (no lingering `nfsd` processes on Docker host)
 - flexible construction of `/etc/exports`
 - extensive server configuration via environment variables
-- helpful, human-readable logging
+- human-readable logging (with a helpful [debug mode](doc/feature/logging.md))
 - *optional* bonus features
   - [Kerberos security](doc/feature/kerberos.md)
   - [NFSv4 user ID mapping](doc/feature/nfs4-user-id-mapping.md) via [`idmapd`](http://man7.org/linux/man-pages/man8/idmapd.8.html)
@@ -24,6 +24,7 @@ This is the only containerized NFS server that offers **all** of the following f
   * [Starting the server](#starting-the-server)
   * [Mounting filesystems from a client](#mounting-filesystems-from-a-client)
 * Optional features
+  * [Debug logging](doc/feature/logging.md)
   * [Kerberos security](doc/feature/kerberos.md)
   * [NFSv4 user ID mapping](doc/feature/nfsv4-user-id-mapping.md)
   * [AppArmor integration](doc/feature/apparmor.md)
@@ -144,6 +145,7 @@ If you pay close attention to each of the items in this section, the server shou
 
 ## Optional Features
 
+  * [Debug logging](doc/feature/logging.md)
   * [Kerberos security](doc/feature/kerberos.md)
   * [NFSv4 user ID mapping](doc/feature/nfs4-user-id-mapping.md)
   * [AppArmor integration](doc/feature/apparmor.md)
