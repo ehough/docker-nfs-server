@@ -4,10 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [2.1.1] - unreleased
+## [2.2.0] - unreleased
+## Added
+* Enhanced debugging via environment variable: `NFS_LOG_LEVEL=DEBUG`. This also produces less cluttered log output
+during regular, non-debug operation.
 ## Fixed
-* `idmapd` was not able to be started when `NFS_VERSION=3`
-* `idmapd` isn't required for Kerberos, so don't force the user to provide `idmapd.conf`
+* `idmapd` would not start when `NFS_VERSION=3`
+* allow Kerberos without `idmapd`. Most users will probably want to run them together, but 
+it isn't required.
+* `NFS_VERSION` environment variable sanity check allowed invalid values
+* status code of `rpc.svcgssd` was not properly checked
+* `idmapd` debug output was invisible
 
 ## [2.1.0] - 2019-10-31
 ### Added

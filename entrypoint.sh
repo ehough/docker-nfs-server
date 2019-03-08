@@ -32,6 +32,7 @@ readonly ENV_VAR_NFS_PORT='NFS_PORT'
 readonly ENV_VAR_NFS_PORT_STATD_IN='NFS_PORT_STATD_IN'
 readonly ENV_VAR_NFS_PORT_STATD_OUT='NFS_PORT_STATD_OUT'
 readonly ENV_VAR_NFS_VERSION='NFS_VERSION'
+readonly ENV_VAR_NFS_LOG_LEVEL='NFS_LOG_LEVEL'
 
 readonly DEFAULT_NFS_SERVER_THREAD_COUNT="$(grep -Ec ^processor /proc/cpuinfo)"
 readonly DEFAULT_NFS_PORT=2049
@@ -150,9 +151,17 @@ stop_mount() {
   local -r type=$(basename "$path")
 
   if mount | grep -Eq ^"$type on $path\\s+"; then
+
+    local args=()
+    if is_debug_requested; then
+      args+=('-v')
+    fi
+    args+=("$path")
+
     log "un-mounting $type filesystem from $path"
-    umount -v "$path"
+    umount "${args[@]}"
     on_failure warn "unable to un-mount $type filesystem from $path"
+
   else
     log "no active mount at $path"
   fi
@@ -167,8 +176,13 @@ stop_nfsd() {
 
 stop_exportfs() {
 
+  local args=('-ua')
+  if is_debug_requested; then
+    args+=('-v')
+  fi
+
   log 'un-exporting filesystem(s)'
-  $PATH_BIN_EXPORTFS -uav
+  $PATH_BIN_EXPORTFS "${args[@]}"
   on_failure warn 'unable to un-export filesystem(s)'
 }
 
@@ -285,6 +299,15 @@ has_linux_capability() {
   return 1
 }
 
+is_debug_requested() {
+
+  if echo "${!ENV_VAR_NFS_LOG_LEVEL}" | grep -Eqi '^DEBUG$'; then
+    return 0
+  fi
+
+  return 1
+}
+
 ######################################################################################
 ### runtime configuration assertions
 ######################################################################################
@@ -331,7 +354,7 @@ assert_nfs_version() {
 
   local -r requested_version="$(get_requested_nfs_version)"
 
-  echo "$requested_version" | grep -Eq '^3|4(\.[1-2])?$'
+  echo "$requested_version" | grep -Eq '^3$|^4(\.[1-2])?$'
   on_failure bail "please set $ENV_VAR_NFS_VERSION to one of: 4.2, 4.1, 4, 3"
 
   if ! is_nfs3_enabled && [[ "$requested_version" = '3' ]]; then
@@ -477,7 +500,11 @@ boot_helper_mount() {
 
   local -r path=$1
   local -r type=$(basename "$path")
-  local -r args=('-vt' "$type" "$path")
+  local args=('-t' "$type" "$path")
+
+  if is_debug_requested; then
+    args+=('-vvv')
+  fi
 
   log "mounting $type filesystem onto $path"
   mount "${args[@]}"
@@ -500,6 +527,16 @@ boot_helper_get_version_flags() {
   echo "${flags[@]}"
 }
 
+boot_helper_check_backgrounded_process() {
+
+  local -r bg_pid=$!
+
+  # somewhat arbitrary assumption that if the process isn't dead already, it will die within 1/20 of a second. for our
+  # purposes this works just fine, but if someone has a better solution please open a PR.
+  sleep .05
+  kill -0 $bg_pid 2> /dev/null
+  on_failure stop "$1 failed"
+}
 
 ######################################################################################
 ### primary boot
@@ -514,8 +551,13 @@ boot_main_mounts() {
 
 boot_main_exportfs() {
 
+  local args=('-ar')
+  if is_debug_requested; then
+    args+=('-v')
+  fi
+
   log 'exporting filesystem(s)'
-  $PATH_BIN_EXPORTFS -arv
+  $PATH_BIN_EXPORTFS "${args[@]}"
   on_failure stop 'exportfs failed'
 }
 
@@ -524,7 +566,10 @@ boot_main_mountd() {
   local version_flags
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
   local -r port=$(get_requested_port_mountd)
-  local -r args=('--debug' 'all' '--port' "$port" "${version_flags[@]}")
+  local args=('--port' "$port" "${version_flags[@]}")
+  if is_debug_requested; then
+    args+=('--debug' 'all')
+  fi
 
   # yes, rpc.mountd is required even for NFS v4: https://forums.gentoo.org/viewtopic-p-7724856.html#7724856
   log "starting rpc.mountd on port $port"
@@ -544,11 +589,18 @@ boot_main_rpcbind() {
 
 boot_main_idmapd() {
 
-  if is_idmapd_requested; then
-    log 'starting idmapd'
-    $PATH_BIN_IDMAPD -v -S
-    on_failure stop 'idmapd failed'
+  if ! is_idmapd_requested; then
+    return
   fi
+
+  local args=('-f -S')
+  if is_debug_requested; then
+    args+=('-vvv')
+  fi
+
+  log 'starting idmapd'
+  $PATH_BIN_IDMAPD "${args[@]}" &
+  boot_helper_check_backgrounded_process $PATH_BIN_IDMAPD
 }
 
 boot_main_statd() {
@@ -572,7 +624,11 @@ boot_main_nfsd() {
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
   local -r threads=$(get_requested_count_nfsd_threads)
   local -r port=$(get_requested_port_nfsd)
-  local -r args=('--debug' 8 '--tcp' '--udp' '--port' "$port" "${version_flags[@]}" "$threads")
+  local args=('--tcp' '--udp' '--port' "$port" "${version_flags[@]}" "$threads")
+
+  if is_debug_requested; then
+    args+=('--debug')
+  fi
 
   log "starting rpc.nfsd on port $port with $threads server thread(s)"
   $PATH_BIN_NFSD "${args[@]}"
@@ -589,9 +645,14 @@ boot_main_svcgssd() {
     return
   fi
 
+  local args=('-f')
+  if is_debug_requested; then
+    args+=('-vvv')
+  fi
+
   log 'starting rpc.svcgssd'
-  $PATH_BIN_RPC_SVCGSSD -f &
-  on_failure stop 'rpc.svcgssd failed'
+  $PATH_BIN_RPC_SVCGSSD "${args[@]}" &
+  boot_helper_check_backgrounded_process $PATH_BIN_RPC_SVCGSSD
 }
 
 
@@ -630,6 +691,13 @@ summarize_exports() {
 
   log 'list of container exports:'
 
+  # if debug is enabled, read /var/lib/nfs/etab as it contains the "real" export data. but it also contains more
+  # information that most people will usually need to see
+  local file_to_read="$PATH_FILE_ETC_EXPORTS"
+  if is_debug_requested; then
+    file_to_read='/var/lib/nfs/etab'
+  fi
+
   while read -r export; do
 
     # skip comments and empty lines
@@ -640,7 +708,7 @@ summarize_exports() {
     # log it w/out leading and trailing whitespace
     log "  $(echo -e "$export" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 
-  done < "$PATH_FILE_ETC_EXPORTS"
+  done < "$file_to_read"
 }
 
 summarize_ports() {
