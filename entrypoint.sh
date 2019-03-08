@@ -256,7 +256,7 @@ is_nfs3_enabled() {
 
 is_idmapd_enabled() {
 
-  if [[ "$(get_requested_nfs_version)" != '3' && -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
+  if [[ -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
     return 0
   fi
 

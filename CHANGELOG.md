@@ -5,8 +5,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [2.1.1] - unreleased
-
-### Fixed
+## Fixed
+* `idmapd` was not able to be started when `NFS_VERSION=3`
 * `idmapd` isn't required for Kerberos, so don't force the user to provide `idmapd.conf`
 
 ## [2.1.0] - 2019-10-31
