@@ -34,7 +34,6 @@ readonly ENV_VAR_NFS_PORT_STATD_OUT='NFS_PORT_STATD_OUT'
 readonly ENV_VAR_NFS_VERSION='NFS_VERSION'
 readonly ENV_VAR_NFS_LOG_LEVEL='NFS_LOG_LEVEL'
 
-readonly DEFAULT_NFS_SERVER_THREAD_COUNT="$(grep -Ec ^processor /proc/cpuinfo)"
 readonly DEFAULT_NFS_PORT=2049
 readonly DEFAULT_NFS_PORT_MOUNTD=32767
 readonly DEFAULT_NFS_PORT_STATD_IN=32765
@@ -225,11 +224,6 @@ get_requested_nfs_version() {
   echo "${!ENV_VAR_NFS_VERSION:-$DEFAULT_NFS_VERSION}"
 }
 
-get_requested_count_nfsd_threads() {
-
-   echo "${!ENV_VAR_NFS_SERVER_THREAD_COUNT:-$DEFAULT_NFS_SERVER_THREAD_COUNT}"
-}
-
 get_requested_port_mountd() {
 
   echo "${!ENV_VAR_NFS_PORT_MOUNTD:-$DEFAULT_NFS_PORT_MOUNTD}"
@@ -308,6 +302,17 @@ is_debug_requested() {
   return 1
 }
 
+get_requested_count_nfsd_threads() {
+
+  if [[ -n "${!ENV_VAR_NFS_SERVER_THREAD_COUNT}" ]]; then
+    echo "${!ENV_VAR_NFS_SERVER_THREAD_COUNT}"
+  else
+    local -r cpu_count="$(grep -Ec ^processor /proc/cpuinfo)"
+    on_failure bail 'unable to detect CPU count. set NFS_SERVER_THREAD_COUNT environment variable'
+    echo "$cpu_count";
+  fi
+}
+
 ######################################################################################
 ### runtime configuration assertions
 ######################################################################################
@@ -380,6 +385,13 @@ assert_cap_sysadmin() {
 
   if ! has_linux_capability 'cap_sys_admin'; then
     bail 'missing CAP_SYS_ADMIN. be sure to run this image with --cap-add SYS_ADMIN or --privileged'
+  fi
+}
+
+assert_log_level() {
+
+  if ! echo "${!ENV_VAR_NFS_LOG_LEVEL}" | grep -Eqi "^$|^DEBUG$"; then
+    bail "the only acceptable value for $ENV_VAR_NFS_LOG_LEVEL is DEBUG"
   fi
 }
 
@@ -470,6 +482,7 @@ init_assertions() {
   assert_port "$ENV_VAR_NFS_PORT_STATD_OUT"
   assert_nfs_version
   assert_nfsd_threads
+  assert_log_level
 
   # check kernel modules
   assert_kernel_mod nfs
@@ -527,7 +540,27 @@ boot_helper_get_version_flags() {
   echo "${flags[@]}"
 }
 
-boot_helper_check_backgrounded_process() {
+boot_helper_start_daemon() {
+
+  local -r msg="$1"
+  local -r daemon="$2"
+  shift 2
+  local -r daemon_args=("$@")
+
+  log "$msg"
+  "$daemon" "${daemon_args[@]}"
+  on_failure stop "$daemon failed"
+}
+
+boot_helper_start_non_daemon() {
+
+  local -r msg="$1"
+  local -r process="$2"
+  shift 2
+  local -r process_args=("$@")
+
+  log "$msg"
+  "$process" "${process_args[@]}" &
 
   local -r bg_pid=$!
 
@@ -535,7 +568,7 @@ boot_helper_check_backgrounded_process() {
   # purposes this works just fine, but if someone has a better solution please open a PR.
   sleep .05
   kill -0 $bg_pid 2> /dev/null
-  on_failure stop "$1 failed"
+  on_failure stop "$process failed"
 }
 
 ######################################################################################
@@ -556,9 +589,7 @@ boot_main_exportfs() {
     args+=('-v')
   fi
 
-  log 'exporting filesystem(s)'
-  $PATH_BIN_EXPORTFS "${args[@]}"
-  on_failure stop 'exportfs failed'
+  boot_helper_start_daemon 'exporting filesystem(s)' $PATH_BIN_EXPORTFS "${args[@]}"
 }
 
 boot_main_mountd() {
@@ -572,9 +603,7 @@ boot_main_mountd() {
   fi
 
   # yes, rpc.mountd is required even for NFS v4: https://forums.gentoo.org/viewtopic-p-7724856.html#7724856
-  log "starting rpc.mountd on port $port"
-  $PATH_BIN_MOUNTD "${args[@]}"
-  on_failure stop 'rpc.mountd failed'
+  boot_helper_start_daemon "starting rpc.mountd on port $port" $PATH_BIN_MOUNTD "${args[@]}"
 }
 
 boot_main_rpcbind() {
@@ -582,9 +611,8 @@ boot_main_rpcbind() {
   # rpcbind isn't required for NFSv4, but if it's not running then nfsd takes over 5 minutes to start up.
   # it's a bug in either nfs-utils or the kernel, and the code of both is over my head.
   # so as a workaround we start rpcbind now and (in v4-only scenarios) kill it after nfsd starts up
-  log 'starting rpcbind'
-  $PATH_BIN_RPCBIND -ds
-  on_failure stop 'rpcbind failed'
+  local -r args=('-ds')
+  boot_helper_start_daemon 'starting rpcbind' $PATH_BIN_RPCBIND "${args[@]}"
 }
 
 boot_main_idmapd() {
@@ -593,14 +621,14 @@ boot_main_idmapd() {
     return
   fi
 
-  local args=('-f -S')
+  local args=('-S')
+  local func=boot_helper_start_daemon
   if is_debug_requested; then
-    args+=('-vvv')
+    args+=('-vvv' '-f')
+    func=boot_helper_start_non_daemon
   fi
 
-  log 'starting idmapd'
-  $PATH_BIN_IDMAPD "${args[@]}" &
-  boot_helper_check_backgrounded_process $PATH_BIN_IDMAPD
+  $func 'starting idmapd' $PATH_BIN_IDMAPD "${args[@]}"
 }
 
 boot_main_statd() {
@@ -613,9 +641,7 @@ boot_main_statd() {
   local -r port_out=$(get_requested_port_statd_out)
   local -r args=('--no-notify' '--port' "$port_in" '--outgoing-port' "$port_out")
 
-  log "starting statd on port $port_in (outgoing connections from port $port_out)"
-  $PATH_BIN_STATD "${args[@]}"
-  on_failure stop 'statd failed'
+  boot_helper_start_daemon "starting statd on port $port_in (outgoing from port $port_out)" $PATH_BIN_STATD "${args[@]}"
 }
 
 boot_main_nfsd() {
@@ -630,9 +656,7 @@ boot_main_nfsd() {
     args+=('--debug')
   fi
 
-  log "starting rpc.nfsd on port $port with $threads server thread(s)"
-  $PATH_BIN_NFSD "${args[@]}"
-  on_failure stop 'rpc.nfsd failed'
+  boot_helper_start_daemon "starting rpc.nfsd on port $port with $threads server thread(s)" $PATH_BIN_NFSD "${args[@]}"
 
   if ! is_nfs3_enabled; then
     kill_process_if_running "$PATH_BIN_RPCBIND"
@@ -650,9 +674,7 @@ boot_main_svcgssd() {
     args+=('-vvv')
   fi
 
-  log 'starting rpc.svcgssd'
-  $PATH_BIN_RPC_SVCGSSD "${args[@]}" &
-  boot_helper_check_backgrounded_process $PATH_BIN_RPC_SVCGSSD
+  boot_helper_start_non_daemon 'starting rpc.svcgssd' $PATH_BIN_RPC_SVCGSSD "${args[@]}"
 }
 
 
