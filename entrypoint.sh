@@ -5,7 +5,7 @@
 # https://hub.docker.com/r/erichough/nfs-server
 # https://github.com/ehough/docker-nfs-server
 #
-# Copyright (C) 2017-2018  Eric D. Hough
+# Copyright (C) 2017-2019  Eric D. Hough
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -32,8 +32,8 @@ readonly ENV_VAR_NFS_PORT='NFS_PORT'
 readonly ENV_VAR_NFS_PORT_STATD_IN='NFS_PORT_STATD_IN'
 readonly ENV_VAR_NFS_PORT_STATD_OUT='NFS_PORT_STATD_OUT'
 readonly ENV_VAR_NFS_VERSION='NFS_VERSION'
+readonly ENV_VAR_NFS_LOG_LEVEL='NFS_LOG_LEVEL'
 
-readonly DEFAULT_NFS_SERVER_THREAD_COUNT="$(grep -Ec ^processor /proc/cpuinfo)"
 readonly DEFAULT_NFS_PORT=2049
 readonly DEFAULT_NFS_PORT_MOUNTD=32767
 readonly DEFAULT_NFS_PORT_STATD_IN=32765
@@ -150,9 +150,17 @@ stop_mount() {
   local -r type=$(basename "$path")
 
   if mount | grep -Eq ^"$type on $path\\s+"; then
+
+    local args=()
+    if is_debug_requested; then
+      args+=('-v')
+    fi
+    args+=("$path")
+
     log "un-mounting $type filesystem from $path"
-    umount -v "$path"
+    umount "${args[@]}"
     on_failure warn "unable to un-mount $type filesystem from $path"
+
   else
     log "no active mount at $path"
   fi
@@ -167,8 +175,13 @@ stop_nfsd() {
 
 stop_exportfs() {
 
+  local args=('-ua')
+  if is_debug_requested; then
+    args+=('-v')
+  fi
+
   log 'un-exporting filesystem(s)'
-  $PATH_BIN_EXPORTFS -uav
+  $PATH_BIN_EXPORTFS "${args[@]}"
   on_failure warn 'unable to un-export filesystem(s)'
 }
 
@@ -176,13 +189,13 @@ stop() {
 
   log_header 'terminating ...'
 
-  if is_kerberos_enabled; then
+  if is_kerberos_requested; then
     kill_process_if_running "$PATH_BIN_RPC_SVCGSSD"
   fi
 
   stop_nfsd
 
-  if is_idmapd_enabled; then
+  if is_idmapd_requested; then
     kill_process_if_running "$PATH_BIN_IDMAPD"
   fi
 
@@ -211,11 +224,6 @@ get_requested_nfs_version() {
   echo "${!ENV_VAR_NFS_VERSION:-$DEFAULT_NFS_VERSION}"
 }
 
-get_requested_count_nfsd_threads() {
-
-   echo "${!ENV_VAR_NFS_SERVER_THREAD_COUNT:-$DEFAULT_NFS_SERVER_THREAD_COUNT}"
-}
-
 get_requested_port_mountd() {
 
   echo "${!ENV_VAR_NFS_PORT_MOUNTD:-$DEFAULT_NFS_PORT_MOUNTD}"
@@ -236,7 +244,7 @@ get_requested_port_statd_out() {
   echo "${!ENV_VAR_NFS_PORT_STATD_OUT:-$DEFAULT_NFS_PORT_STATD_OUT}"
 }
 
-is_kerberos_enabled() {
+is_kerberos_requested() {
 
   if [[ -n "${!ENV_VAR_NFS_ENABLE_KERBEROS}" ]]; then
     return 0
@@ -254,9 +262,9 @@ is_nfs3_enabled() {
   return 1
 }
 
-is_idmapd_enabled() {
+is_idmapd_requested() {
 
-  if [[ "$(get_requested_nfs_version)" != '3' && -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
+  if [[ -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
     return 0
   fi
 
@@ -283,6 +291,26 @@ has_linux_capability() {
   fi
 
   return 1
+}
+
+is_debug_requested() {
+
+  if echo "${!ENV_VAR_NFS_LOG_LEVEL}" | grep -Eqi '^DEBUG$'; then
+    return 0
+  fi
+
+  return 1
+}
+
+get_requested_count_nfsd_threads() {
+
+  if [[ -n "${!ENV_VAR_NFS_SERVER_THREAD_COUNT}" ]]; then
+    echo "${!ENV_VAR_NFS_SERVER_THREAD_COUNT}"
+  else
+    local -r cpu_count="$(grep -Ec ^processor /proc/cpuinfo)"
+    on_failure bail 'unable to detect CPU count. set NFS_SERVER_THREAD_COUNT environment variable'
+    echo "$cpu_count";
+  fi
 }
 
 ######################################################################################
@@ -331,7 +359,7 @@ assert_nfs_version() {
 
   local -r requested_version="$(get_requested_nfs_version)"
 
-  echo "$requested_version" | grep -Eq '^3|4(\.[1-2])?$'
+  echo "$requested_version" | grep -Eq '^3$|^4(\.[1-2])?$'
   on_failure bail "please set $ENV_VAR_NFS_VERSION to one of: 4.2, 4.1, 4, 3"
 
   if ! is_nfs3_enabled && [[ "$requested_version" = '3' ]]; then
@@ -357,6 +385,13 @@ assert_cap_sysadmin() {
 
   if ! has_linux_capability 'cap_sys_admin'; then
     bail 'missing CAP_SYS_ADMIN. be sure to run this image with --cap-add SYS_ADMIN or --privileged'
+  fi
+}
+
+assert_log_level() {
+
+  if ! echo "${!ENV_VAR_NFS_LOG_LEVEL}" | grep -Eqi "^$|^DEBUG$"; then
+    bail "the only acceptable value for $ENV_VAR_NFS_LOG_LEVEL is DEBUG"
   fi
 }
 
@@ -447,6 +482,7 @@ init_assertions() {
   assert_port "$ENV_VAR_NFS_PORT_STATD_OUT"
   assert_nfs_version
   assert_nfsd_threads
+  assert_log_level
 
   # check kernel modules
   assert_kernel_mod nfs
@@ -459,9 +495,8 @@ init_assertions() {
   assert_cap_sysadmin
 
   # perform Kerberos assertions
-  if is_kerberos_enabled; then
+  if is_kerberos_requested; then
 
-    assert_file_provided "$PATH_FILE_ETC_IDMAPD_CONF"
     assert_file_provided "$PATH_FILE_ETC_KRB5_KEYTAB"
     assert_file_provided "$PATH_FILE_ETC_KRB5_CONF"
 
@@ -478,7 +513,11 @@ boot_helper_mount() {
 
   local -r path=$1
   local -r type=$(basename "$path")
-  local -r args=('-vt' "$type" "$path")
+  local args=('-t' "$type" "$path")
+
+  if is_debug_requested; then
+    args+=('-vvv')
+  fi
 
   log "mounting $type filesystem onto $path"
   mount "${args[@]}"
@@ -501,6 +540,36 @@ boot_helper_get_version_flags() {
   echo "${flags[@]}"
 }
 
+boot_helper_start_daemon() {
+
+  local -r msg="$1"
+  local -r daemon="$2"
+  shift 2
+  local -r daemon_args=("$@")
+
+  log "$msg"
+  "$daemon" "${daemon_args[@]}"
+  on_failure stop "$daemon failed"
+}
+
+boot_helper_start_non_daemon() {
+
+  local -r msg="$1"
+  local -r process="$2"
+  shift 2
+  local -r process_args=("$@")
+
+  log "$msg"
+  "$process" "${process_args[@]}" &
+
+  local -r bg_pid=$!
+
+  # somewhat arbitrary assumption that if the process isn't dead already, it will die within 1/20 of a second. for our
+  # purposes this works just fine, but if someone has a better solution please open a PR.
+  sleep .05
+  kill -0 $bg_pid 2> /dev/null
+  on_failure stop "$process failed"
+}
 
 ######################################################################################
 ### primary boot
@@ -515,9 +584,12 @@ boot_main_mounts() {
 
 boot_main_exportfs() {
 
-  log 'exporting filesystem(s)'
-  $PATH_BIN_EXPORTFS -arv
-  on_failure stop 'exportfs failed'
+  local args=('-ar')
+  if is_debug_requested; then
+    args+=('-v')
+  fi
+
+  boot_helper_start_daemon 'exporting filesystem(s)' $PATH_BIN_EXPORTFS "${args[@]}"
 }
 
 boot_main_mountd() {
@@ -525,12 +597,13 @@ boot_main_mountd() {
   local version_flags
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
   local -r port=$(get_requested_port_mountd)
-  local -r args=('--debug' 'all' '--port' "$port" "${version_flags[@]}")
+  local args=('--port' "$port" "${version_flags[@]}")
+  if is_debug_requested; then
+    args+=('--debug' 'all')
+  fi
 
   # yes, rpc.mountd is required even for NFS v4: https://forums.gentoo.org/viewtopic-p-7724856.html#7724856
-  log "starting rpc.mountd on port $port"
-  $PATH_BIN_MOUNTD "${args[@]}"
-  on_failure stop 'rpc.mountd failed'
+  boot_helper_start_daemon "starting rpc.mountd on port $port" $PATH_BIN_MOUNTD "${args[@]}"
 }
 
 boot_main_rpcbind() {
@@ -538,18 +611,24 @@ boot_main_rpcbind() {
   # rpcbind isn't required for NFSv4, but if it's not running then nfsd takes over 5 minutes to start up.
   # it's a bug in either nfs-utils or the kernel, and the code of both is over my head.
   # so as a workaround we start rpcbind now and (in v4-only scenarios) kill it after nfsd starts up
-  log 'starting rpcbind'
-  $PATH_BIN_RPCBIND -ds
-  on_failure stop 'rpcbind failed'
+  local -r args=('-ds')
+  boot_helper_start_daemon 'starting rpcbind' $PATH_BIN_RPCBIND "${args[@]}"
 }
 
 boot_main_idmapd() {
 
-  if is_idmapd_enabled; then
-    log 'starting idmapd'
-    $PATH_BIN_IDMAPD -v -S
-    on_failure stop 'idmapd failed'
+  if ! is_idmapd_requested; then
+    return
   fi
+
+  local args=('-S')
+  local func=boot_helper_start_daemon
+  if is_debug_requested; then
+    args+=('-vvv' '-f')
+    func=boot_helper_start_non_daemon
+  fi
+
+  $func 'starting idmapd' $PATH_BIN_IDMAPD "${args[@]}"
 }
 
 boot_main_statd() {
@@ -562,9 +641,7 @@ boot_main_statd() {
   local -r port_out=$(get_requested_port_statd_out)
   local -r args=('--no-notify' '--port' "$port_in" '--outgoing-port' "$port_out")
 
-  log "starting statd on port $port_in (outgoing connections from port $port_out)"
-  $PATH_BIN_STATD "${args[@]}"
-  on_failure stop 'statd failed'
+  boot_helper_start_daemon "starting statd on port $port_in (outgoing from port $port_out)" $PATH_BIN_STATD "${args[@]}"
 }
 
 boot_main_nfsd() {
@@ -573,11 +650,13 @@ boot_main_nfsd() {
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
   local -r threads=$(get_requested_count_nfsd_threads)
   local -r port=$(get_requested_port_nfsd)
-  local -r args=('--debug' 8 '--tcp' '--udp' '--port' "$port" "${version_flags[@]}" "$threads")
+  local args=('--tcp' '--udp' '--port' "$port" "${version_flags[@]}" "$threads")
 
-  log "starting rpc.nfsd on port $port with $threads server thread(s)"
-  $PATH_BIN_NFSD "${args[@]}"
-  on_failure stop 'rpc.nfsd failed'
+  if is_debug_requested; then
+    args+=('--debug')
+  fi
+
+  boot_helper_start_daemon "starting rpc.nfsd on port $port with $threads server thread(s)" $PATH_BIN_NFSD "${args[@]}"
 
   if ! is_nfs3_enabled; then
     kill_process_if_running "$PATH_BIN_RPCBIND"
@@ -586,13 +665,16 @@ boot_main_nfsd() {
 
 boot_main_svcgssd() {
 
-  if ! is_kerberos_enabled; then
+  if ! is_kerberos_requested; then
     return
   fi
 
-  log 'starting rpc.svcgssd'
-  $PATH_BIN_RPC_SVCGSSD -f &
-  on_failure stop 'rpc.svcgssd failed'
+  local args=('-f')
+  if is_debug_requested; then
+    args+=('-vvv')
+  fi
+
+  boot_helper_start_non_daemon 'starting rpc.svcgssd' $PATH_BIN_RPC_SVCGSSD "${args[@]}"
 }
 
 
@@ -631,6 +713,13 @@ summarize_exports() {
 
   log 'list of container exports:'
 
+  # if debug is enabled, read /var/lib/nfs/etab as it contains the "real" export data. but it also contains more
+  # information that most people will usually need to see
+  local file_to_read="$PATH_FILE_ETC_EXPORTS"
+  if is_debug_requested; then
+    file_to_read='/var/lib/nfs/etab'
+  fi
+
   while read -r export; do
 
     # skip comments and empty lines
@@ -641,7 +730,7 @@ summarize_exports() {
     # log it w/out leading and trailing whitespace
     log "  $(echo -e "$export" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 
-  done < "$PATH_FILE_ETC_EXPORTS"
+  done < "$file_to_read"
 }
 
 summarize_ports() {
