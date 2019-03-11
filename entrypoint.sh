@@ -65,6 +65,7 @@ readonly STATE_LOG_LEVEL='log_level'
 readonly STATE_IS_LOGGING_DEBUG='is_logging_debug'
 readonly STATE_IS_LOGGING_INFO='is_logging_info'
 readonly STATE_NFSD_THREAD_COUNT='nfsd_thread_count'
+readonly STATE_NFSD_PORT='nfsd_port'
 
 # "state" is our only global variable, which is an associative array of normalized data
 declare -A state
@@ -252,7 +253,7 @@ get_requested_port_mountd() {
 
 get_requested_port_nfsd() {
 
-  echo "${!ENV_VAR_NFS_PORT:-$DEFAULT_NFS_PORT}"
+  echo "${state[$STATE_NFSD_PORT]}"
 }
 
 get_requested_port_statd_in() {
@@ -452,6 +453,12 @@ init_state_nfsd_thread_count() {
   state[$STATE_NFSD_THREAD_COUNT]=$count
 }
 
+init_state_nfsd_port() {
+
+  assert_port "$ENV_VAR_NFS_PORT"
+  state[$STATE_NFSD_PORT]=${!ENV_VAR_NFS_PORT:-$DEFAULT_NFS_PORT}
+}
+
 init_trap() {
 
   trap stop SIGTERM SIGINT
@@ -532,7 +539,6 @@ init_exports() {
 init_assertions() {
 
   # validate any user-supplied environment variables
-  assert_port "$ENV_VAR_NFS_PORT"
   assert_port "$ENV_VAR_NFS_PORT_MOUNTD"
   assert_port "$ENV_VAR_NFS_PORT_STATD_IN"
   assert_port "$ENV_VAR_NFS_PORT_STATD_OUT"
@@ -816,6 +822,7 @@ init() {
   init_state_logging
   init_exports
   init_state_nfsd_thread_count
+  init_state_nfsd_port
   init_assertions
   init_trap
 
