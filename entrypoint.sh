@@ -66,6 +66,9 @@ readonly STATE_IS_LOGGING_DEBUG='is_logging_debug'
 readonly STATE_IS_LOGGING_INFO='is_logging_info'
 readonly STATE_NFSD_THREAD_COUNT='nfsd_thread_count'
 readonly STATE_NFSD_PORT='nfsd_port'
+readonly STATE_MOUNTD_PORT='mountd_port'
+readonly STATE_STATD_PORT_IN='statd_port_in'
+readonly STATE_STATD_PORT_OUT='statd_port_out'
 
 # "state" is our only global variable, which is an associative array of normalized data
 declare -A state
@@ -248,7 +251,7 @@ get_requested_nfs_version() {
 
 get_requested_port_mountd() {
 
-  echo "${!ENV_VAR_NFS_PORT_MOUNTD:-$DEFAULT_NFS_PORT_MOUNTD}"
+  echo "${state[$STATE_MOUNTD_PORT]}"
 }
 
 get_requested_port_nfsd() {
@@ -258,39 +261,27 @@ get_requested_port_nfsd() {
 
 get_requested_port_statd_in() {
 
-  echo "${!ENV_VAR_NFS_PORT_STATD_IN:-$DEFAULT_NFS_PORT_STATD_IN}"
+  echo "${state[$STATE_STATD_PORT_IN]}"
 }
 
 get_requested_port_statd_out() {
 
-  echo "${!ENV_VAR_NFS_PORT_STATD_OUT:-$DEFAULT_NFS_PORT_STATD_OUT}"
+  echo "${state[$STATE_STATD_PORT_OUT]}"
 }
 
 is_kerberos_requested() {
 
-  if [[ -n "${!ENV_VAR_NFS_ENABLE_KERBEROS}" ]]; then
-    return 0
-  fi
-
-  return 1
+  [[ -n "${!ENV_VAR_NFS_ENABLE_KERBEROS}" ]] && return 0 || return 1
 }
 
 is_nfs3_enabled() {
 
-  if [[ -z "${!ENV_VAR_NFS_DISABLE_VERSION_3}" ]]; then
-    return 0
-  fi
-
-  return 1
+  [[ -z "${!ENV_VAR_NFS_DISABLE_VERSION_3}" ]] && return 0 || return 1
 }
 
 is_idmapd_requested() {
 
-  if [[ -f "$PATH_FILE_ETC_IDMAPD_CONF" ]]; then
-    return 0
-  fi
-
-  return 1
+  [[ -f "$PATH_FILE_ETC_IDMAPD_CONF" ]] && return 0 || return 1
 }
 
 is_kernel_module_loaded() {
@@ -394,13 +385,6 @@ assert_cap_sysadmin() {
   fi
 }
 
-assert_log_level() {
-
-  if ! echo "${!ENV_VAR_NFS_LOG_LEVEL}" | grep -Eqi "^$|^DEBUG$"; then
-    bail "the only acceptable value for $ENV_VAR_NFS_LOG_LEVEL is DEBUG"
-  fi
-}
-
 
 ######################################################################################
 ### initialization
@@ -417,6 +401,7 @@ init_state_logging() {
 
   state[$STATE_LOG_LEVEL]=$normalized_log_level;
   state[$STATE_IS_LOGGING_INFO]=1
+  state[$STATE_IS_LOGGING_DEBUG]=0
 
   if [[ $normalized_log_level = "$LOG_LEVEL_DEBUG" ]]; then
     state[$STATE_IS_LOGGING_DEBUG]=1
@@ -453,10 +438,17 @@ init_state_nfsd_thread_count() {
   state[$STATE_NFSD_THREAD_COUNT]=$count
 }
 
-init_state_nfsd_port() {
+init_state_ports() {
 
   assert_port "$ENV_VAR_NFS_PORT"
+  assert_port "$ENV_VAR_NFS_PORT_MOUNTD"
+  assert_port "$ENV_VAR_NFS_PORT_STATD_IN"
+  assert_port "$ENV_VAR_NFS_PORT_STATD_OUT"
+
   state[$STATE_NFSD_PORT]=${!ENV_VAR_NFS_PORT:-$DEFAULT_NFS_PORT}
+  state[$STATE_MOUNTD_PORT]=${!ENV_VAR_NFS_PORT_MOUNTD:-$DEFAULT_NFS_PORT_MOUNTD}
+  state[$STATE_STATD_PORT_IN]=${!ENV_VAR_NFS_PORT_STATD_IN:-$DEFAULT_NFS_PORT_STATD_IN}
+  state[$STATE_STATD_PORT_OUT]=${!ENV_VAR_NFS_PORT_STATD_OUT:-$DEFAULT_NFS_PORT_STATD_OUT}
 }
 
 init_trap() {
@@ -539,9 +531,6 @@ init_exports() {
 init_assertions() {
 
   # validate any user-supplied environment variables
-  assert_port "$ENV_VAR_NFS_PORT_MOUNTD"
-  assert_port "$ENV_VAR_NFS_PORT_STATD_IN"
-  assert_port "$ENV_VAR_NFS_PORT_STATD_OUT"
   assert_nfs_version
 
   # check kernel modules
@@ -822,7 +811,7 @@ init() {
   init_state_logging
   init_exports
   init_state_nfsd_thread_count
-  init_state_nfsd_port
+  init_state_ports
   init_assertions
   init_trap
 
