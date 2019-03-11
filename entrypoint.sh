@@ -64,6 +64,7 @@ readonly LOG_LEVEL_DEBUG='DEBUG'
 readonly STATE_LOG_LEVEL='log_level'
 readonly STATE_IS_LOGGING_DEBUG='is_logging_debug'
 readonly STATE_IS_LOGGING_INFO='is_logging_info'
+readonly STATE_NFSD_THREAD_COUNT='nfsd_thread_count'
 
 # "state" is our only global variable, which is an associative array of normalized data
 declare -A state
@@ -315,13 +316,7 @@ has_linux_capability() {
 
 get_requested_count_nfsd_threads() {
 
-  if [[ -n "${!ENV_VAR_NFS_SERVER_THREAD_COUNT}" ]]; then
-    echo "${!ENV_VAR_NFS_SERVER_THREAD_COUNT}"
-  else
-    local -r cpu_count="$(grep -Ec ^processor /proc/cpuinfo)"
-    on_failure bail 'unable to detect CPU count. set NFS_SERVER_THREAD_COUNT environment variable'
-    echo "$cpu_count";
-  fi
+  echo "${state[$STATE_NFSD_THREAD_COUNT]}"
 }
 
 is_logging_debug() {
@@ -384,13 +379,6 @@ assert_nfs_version() {
   fi
 }
 
-assert_nfsd_threads() {
-
-  if [[ "$(get_requested_count_nfsd_threads)" -lt 1 ]]; then
-    bail "please set $ENV_VAR_NFS_SERVER_THREAD_COUNT to a positive integer"
-  fi
-}
-
 assert_at_least_one_export() {
 
   # ensure /etc/exports has at least one line
@@ -432,6 +420,36 @@ init_state_logging() {
   if [[ $normalized_log_level = "$LOG_LEVEL_DEBUG" ]]; then
     state[$STATE_IS_LOGGING_DEBUG]=1
   fi
+}
+
+init_state_nfsd_thread_count() {
+
+  local count
+
+  if [[ -n "${!ENV_VAR_NFS_SERVER_THREAD_COUNT}" ]]; then
+
+    count="${!ENV_VAR_NFS_SERVER_THREAD_COUNT}"
+
+    if [[ $count -lt 1 ]]; then
+      bail "please set $ENV_VAR_NFS_SERVER_THREAD_COUNT to a positive integer"
+    fi
+
+    if is_logging_debug; then
+      log "will use requested rpc.nfsd thread count of $count"
+    fi
+
+  else
+
+    count="$(grep -Ec ^processor /proc/cpuinfo)"
+    on_failure bail "unable to detect CPU count. set $ENV_VAR_NFS_SERVER_THREAD_COUNT environment variable"
+
+    if is_logging_debug; then
+      log "will use $count rpc.nfsd server thread(s) (1 thread per CPU)"
+    fi
+
+  fi
+
+  state[$STATE_NFSD_THREAD_COUNT]=$count
 }
 
 init_trap() {
@@ -519,7 +537,6 @@ init_assertions() {
   assert_port "$ENV_VAR_NFS_PORT_STATD_IN"
   assert_port "$ENV_VAR_NFS_PORT_STATD_OUT"
   assert_nfs_version
-  assert_nfsd_threads
 
   # check kernel modules
   assert_kernel_mod nfs
@@ -798,6 +815,7 @@ init() {
 
   init_state_logging
   init_exports
+  init_state_nfsd_thread_count
   init_assertions
   init_trap
 
