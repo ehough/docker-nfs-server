@@ -58,6 +58,26 @@ readonly MOUNT_PATH_RPC_PIPEFS='/var/lib/nfs/rpc_pipefs'
 
 readonly REGEX_EXPORTS_LINES_TO_SKIP='^\s*#|^\s*$'
 
+readonly LOG_LEVEL_INFO='INFO'
+readonly LOG_LEVEL_DEBUG='DEBUG'
+
+readonly STATE_LOG_LEVEL='log_level'
+readonly STATE_IS_LOGGING_DEBUG='is_logging_debug'
+readonly STATE_IS_LOGGING_INFO='is_logging_info'
+
+# "state" is our only global variable, which is an associative array of normalized data
+declare -A state
+
+
+######################################################################################
+### string utils
+######################################################################################
+
+toupper() {
+
+  echo "$1" | awk '{ print toupper($0) }'
+}
+
 
 ######################################################################################
 ### logging
@@ -84,7 +104,7 @@ log_header() {
 
   echo "
 ==================================================================
-      $(echo "$1" | awk '{print toupper($0)}')
+      $(toupper "$1")
 =================================================================="
 }
 
@@ -152,7 +172,7 @@ stop_mount() {
   if mount | grep -Eq ^"$type on $path\\s+"; then
 
     local args=()
-    if is_debug_requested; then
+    if is_logging_debug; then
       args+=('-v')
     fi
     args+=("$path")
@@ -176,7 +196,7 @@ stop_nfsd() {
 stop_exportfs() {
 
   local args=('-ua')
-  if is_debug_requested; then
+  if is_logging_debug; then
     args+=('-v')
   fi
 
@@ -293,15 +313,6 @@ has_linux_capability() {
   return 1
 }
 
-is_debug_requested() {
-
-  if echo "${!ENV_VAR_NFS_LOG_LEVEL}" | grep -Eqi '^DEBUG$'; then
-    return 0
-  fi
-
-  return 1
-}
-
 get_requested_count_nfsd_threads() {
 
   if [[ -n "${!ENV_VAR_NFS_SERVER_THREAD_COUNT}" ]]; then
@@ -312,6 +323,12 @@ get_requested_count_nfsd_threads() {
     echo "$cpu_count";
   fi
 }
+
+is_logging_debug() {
+
+  [[ -n ${state[$STATE_IS_LOGGING_DEBUG]} ]] && return 0 || return 1
+}
+
 
 ######################################################################################
 ### runtime configuration assertions
@@ -400,6 +417,23 @@ assert_log_level() {
 ### initialization
 ######################################################################################
 
+init_state_logging() {
+
+  # if the user didn't request a specific log level, the default is INFO
+  local -r normalized_log_level=$(toupper "${!ENV_VAR_NFS_LOG_LEVEL:-$LOG_LEVEL_INFO}")
+
+  if ! echo "$normalized_log_level" | grep -Eq 'DEBUG|INFO'; then
+    bail "the only acceptable values for $ENV_VAR_NFS_LOG_LEVEL are: DEBUG, INFO"
+  fi
+
+  state[$STATE_LOG_LEVEL]=$normalized_log_level;
+  state[$STATE_IS_LOGGING_INFO]=1
+
+  if [[ $normalized_log_level = "$LOG_LEVEL_DEBUG" ]]; then
+    state[$STATE_IS_LOGGING_DEBUG]=1
+  fi
+}
+
 init_trap() {
 
   trap stop SIGTERM SIGINT
@@ -409,13 +443,17 @@ init_exports() {
 
   # first, see if it's bind-mounted
   if mount | grep -Eq "^[^ ]+ on $PATH_FILE_ETC_EXPORTS type "; then
-    log "$PATH_FILE_ETC_EXPORTS is bind-mounted"
+    if is_logging_debug; then
+      log "$PATH_FILE_ETC_EXPORTS is bind-mounted"
+    fi
     return
   fi
 
   # maybe it's baked-in to the image
   if [[ -f $PATH_FILE_ETC_EXPORTS && -r $PATH_FILE_ETC_EXPORTS && -s $PATH_FILE_ETC_EXPORTS ]]; then
-    log "$PATH_FILE_ETC_EXPORTS is baked into the image"
+    if is_logging_debug; then
+      log "$PATH_FILE_ETC_EXPORTS is baked into the image"
+    fi
     return
   fi
 
@@ -482,7 +520,6 @@ init_assertions() {
   assert_port "$ENV_VAR_NFS_PORT_STATD_OUT"
   assert_nfs_version
   assert_nfsd_threads
-  assert_log_level
 
   # check kernel modules
   assert_kernel_mod nfs
@@ -515,7 +552,7 @@ boot_helper_mount() {
   local -r type=$(basename "$path")
   local args=('-t' "$type" "$path")
 
-  if is_debug_requested; then
+  if is_logging_debug; then
     args+=('-vvv')
   fi
 
@@ -585,7 +622,7 @@ boot_main_mounts() {
 boot_main_exportfs() {
 
   local args=('-ar')
-  if is_debug_requested; then
+  if is_logging_debug; then
     args+=('-v')
   fi
 
@@ -598,7 +635,7 @@ boot_main_mountd() {
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
   local -r port=$(get_requested_port_mountd)
   local args=('--port' "$port" "${version_flags[@]}")
-  if is_debug_requested; then
+  if is_logging_debug; then
     args+=('--debug' 'all')
   fi
 
@@ -623,7 +660,7 @@ boot_main_idmapd() {
 
   local args=('-S')
   local func=boot_helper_start_daemon
-  if is_debug_requested; then
+  if is_logging_debug; then
     args+=('-vvv' '-f')
     func=boot_helper_start_non_daemon
   fi
@@ -652,7 +689,7 @@ boot_main_nfsd() {
   local -r port=$(get_requested_port_nfsd)
   local args=('--tcp' '--udp' '--port' "$port" "${version_flags[@]}" "$threads")
 
-  if is_debug_requested; then
+  if is_logging_debug; then
     args+=('--debug')
   fi
 
@@ -670,7 +707,7 @@ boot_main_svcgssd() {
   fi
 
   local args=('-f')
-  if is_debug_requested; then
+  if is_logging_debug; then
     args+=('-vvv')
   fi
 
@@ -716,7 +753,7 @@ summarize_exports() {
   # if debug is enabled, read /var/lib/nfs/etab as it contains the "real" export data. but it also contains more
   # information that most people will usually need to see
   local file_to_read="$PATH_FILE_ETC_EXPORTS"
-  if is_debug_requested; then
+  if is_logging_debug; then
     file_to_read='/var/lib/nfs/etab'
   fi
 
@@ -759,6 +796,7 @@ init() {
 
   log_header 'setting up ...'
 
+  init_state_logging
   init_exports
   init_assertions
   init_trap
