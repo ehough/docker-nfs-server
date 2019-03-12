@@ -316,7 +316,7 @@ assert_kernel_mod() {
 
   log "attempting to load kernel module $module"
   modprobe -v "$module"
-  on_failure bail "unable to dynamically load kernel module $module. try modproble $module on the Docker host"
+  on_failure bail "unable to dynamically load kernel module $module. try modprobe $module on the Docker host"
 
   if ! is_kernel_module_loaded "$module"; then
     bail "modprobe claims that it loaded kernel module $module, but it still appears to be missing"
