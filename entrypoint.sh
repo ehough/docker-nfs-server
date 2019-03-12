@@ -245,31 +245,6 @@ stop() {
 ### runtime environment detection
 ######################################################################################
 
-get_requested_nfs_version() {
-
-  echo "${state[$STATE_NFS_VERSION]}"
-}
-
-get_requested_port_mountd() {
-
-  echo "${state[$STATE_MOUNTD_PORT]}"
-}
-
-get_requested_port_nfsd() {
-
-  echo "${state[$STATE_NFSD_PORT]}"
-}
-
-get_requested_port_statd_in() {
-
-  echo "${state[$STATE_STATD_PORT_IN]}"
-}
-
-get_requested_port_statd_out() {
-
-  echo "${state[$STATE_STATD_PORT_OUT]}"
-}
-
 is_kerberos_requested() {
 
   [[ -n "${!ENV_VAR_NFS_ENABLE_KERBEROS}" ]] && return 0 || return 1
@@ -283,6 +258,11 @@ is_nfs3_enabled() {
 is_idmapd_requested() {
 
   [[ -f "$PATH_FILE_ETC_IDMAPD_CONF" ]] && return 0 || return 1
+}
+
+is_logging_debug() {
+
+  [[ -n ${state[$STATE_IS_LOGGING_DEBUG]} ]] && return 0 || return 1
 }
 
 is_kernel_module_loaded() {
@@ -308,16 +288,6 @@ has_linux_capability() {
   fi
 
   return 1
-}
-
-get_requested_count_nfsd_threads() {
-
-  echo "${state[$STATE_NFSD_THREAD_COUNT]}"
-}
-
-is_logging_debug() {
-
-  [[ -n ${state[$STATE_IS_LOGGING_DEBUG]} ]] && return 0 || return 1
 }
 
 
@@ -568,7 +538,7 @@ boot_helper_mount() {
 
 boot_helper_get_version_flags() {
 
-  local -r requested_version="$(get_requested_nfs_version)"
+  local -r requested_version="${state[$STATE_NFS_VERSION]}"
   local flags=('--nfs-version' "$requested_version" '--no-nfs-version' 2)
 
   if ! is_nfs3_enabled; then
@@ -638,7 +608,7 @@ boot_main_mountd() {
 
   local version_flags
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
-  local -r port=$(get_requested_port_mountd)
+  local -r port="${state[$STATE_MOUNTD_PORT]}"
   local args=('--port' "$port" "${version_flags[@]}")
   if is_logging_debug; then
     args+=('--debug' 'all')
@@ -679,8 +649,8 @@ boot_main_statd() {
     return
   fi
 
-  local -r port_in=$(get_requested_port_statd_in)
-  local -r port_out=$(get_requested_port_statd_out)
+  local -r port_in="${state[$STATE_STATD_PORT_IN]}"
+  local -r port_out="${state[$STATE_STATD_PORT_OUT]}"
   local -r args=('--no-notify' '--port' "$port_in" '--outgoing-port' "$port_out")
 
   boot_helper_start_daemon "starting statd on port $port_in (outgoing from port $port_out)" $PATH_BIN_STATD "${args[@]}"
@@ -690,8 +660,8 @@ boot_main_nfsd() {
 
   local version_flags
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
-  local -r threads=$(get_requested_count_nfsd_threads)
-  local -r port=$(get_requested_port_nfsd)
+  local -r threads="${state[$STATE_NFSD_THREAD_COUNT]}"
+  local -r port="${state[$STATE_NFSD_PORT]}"
   local args=('--tcp' '--udp' '--port' "$port" "${version_flags[@]}" "$threads")
 
   if is_logging_debug; then
@@ -726,7 +696,7 @@ boot_main_svcgssd() {
 
 summarize_nfs_versions() {
 
-  local -r reqd_version="$(get_requested_nfs_version)"
+  local -r reqd_version="${state[$STATE_NFS_VERSION]}"
   local versions=''
 
   case "$reqd_version" in
@@ -777,9 +747,9 @@ summarize_exports() {
 
 summarize_ports() {
 
-  local -r port_nfsd="$(get_requested_port_nfsd)"
-  local -r port_mountd="$(get_requested_port_mountd)"
-  local -r port_statd_in="$(get_requested_port_statd_in)"
+  local -r port_nfsd="${state[$STATE_NFSD_PORT]}"
+  local -r port_mountd="${state[$STATE_MOUNTD_PORT]}"
+  local -r port_statd_in="${state[$STATE_STATD_PORT_IN]}"
 
   if ! is_nfs3_enabled; then
     log "list of container ports that should be exposed: $port_nfsd (TCP)"
