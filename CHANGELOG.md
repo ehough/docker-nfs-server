@@ -4,11 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - unreleased
+
+### Fixed
+* `rpc.statd` debug output was invisible
+
 ## [2.2.0] - 2019-03-08
-## Added
+
+### Added
 * Enhanced debugging via environment variable: `NFS_LOG_LEVEL=DEBUG`. This also produces less cluttered log output
 during regular, non-debug operation.
-## Fixed
+
+### Fixed
 * `idmapd` would not start when `NFS_VERSION=3`
 * allow Kerberos without `idmapd`. Most users will probably want to run them together, but 
 it isn't required.
@@ -17,8 +24,10 @@ it isn't required.
 * `idmapd` debug output was invisible
 
 ## [2.1.0] - 2019-01-31
+
 ### Added
 * Ability to automatically load kernel modules. ([#18](https://github.com/ehough/docker-nfs-server/issues/18)). Credit to [@andyneff](https://github.com/andyneff).
+
 ### Fixed
 * Minor bugs in `entrypoint.sh`
 
