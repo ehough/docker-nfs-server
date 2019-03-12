@@ -606,6 +606,11 @@ boot_main_exportfs() {
 
 boot_main_mountd() {
 
+  # https://linux.die.net/man/8/rpc.mountd
+  #
+  # --debug  turn on debugging. Valid kinds are: all, auth, call, general and parse.
+  # --port   specifies the port number used for RPC listener sockets
+
   local version_flags
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
   local -r port="${state[$STATE_MOUNTD_PORT]}"
@@ -620,10 +625,19 @@ boot_main_mountd() {
 
 boot_main_rpcbind() {
 
-  # rpcbind isn't required for NFSv4, but if it's not running then nfsd takes over 5 minutes to start up.
-  # it's a bug in either nfs-utils or the kernel, and the code of both is over my head.
-  # so as a workaround we start rpcbind now and (in v4-only scenarios) kill it after nfsd starts up
-  local -r args=('-ds')
+  # https://linux.die.net/man/8/rpcbind
+  #
+  # -d  run in debug mode. in this mode, rpcbind will not fork when it starts, will print additional information during
+  #     operation, and will abort on certain errors if -a is also specified. with this option, the name-to-address
+  #     translation consistency checks are shown in detail
+  # -s  cause rpcbind to change to the user daemon as soon as possible. this causes rpcbind to use non-privileged ports
+  #     for outgoing connections, preventing non-privileged clients from using rpcbind to connect to services from a
+  #     privileged port
+
+  local args=('-s')
+  if is_logging_debug; then
+    arg+=('-d')
+  fi
   boot_helper_start_daemon 'starting rpcbind' $PATH_BIN_RPCBIND "${args[@]}"
 }
 
@@ -632,6 +646,12 @@ boot_main_idmapd() {
   if ! is_idmapd_requested; then
     return
   fi
+
+  # https://linux.die.net/man/8/rpc.idmapd
+  #
+  # -S  Server-only: perform no idmapping for any NFS client, even if one is detected
+  # -v  increases the verbosity level (can be specified multiple times
+  # -f  runs rpc.idmapd in the foreground and prints all output to the terminal
 
   local args=('-S')
   local func=boot_helper_start_daemon
@@ -649,14 +669,43 @@ boot_main_statd() {
     return
   fi
 
+  # https://linux.die.net/man/8/rpc.statd
+  #
+  # --no-syslog      causes rpc.statd to write log messages on stderr instead of to the system log, if the -F option was
+  #                  also specified
+  # --foreground     keeps rpc.statd attached to its controlling terminal so that NSM operation can be monitored
+  #                  directly or run under a debugger. if this option is not specified, rpc.statd backgrounds itself
+  #                  soon after it starts
+  # --no-notify      prevents rpc.statd from running the sm-notify command when it starts up, preserving the existing
+  #                  NSM state number and monitor list
+  # --outgoing-port  specifies the source port number the sm-notify command should use when sending reboot notifications
+  # --port           specifies the port number used for RPC listener sockets
+
   local -r port_in="${state[$STATE_STATD_PORT_IN]}"
   local -r port_out="${state[$STATE_STATD_PORT_OUT]}"
-  local -r args=('--no-notify' '--port' "$port_in" '--outgoing-port' "$port_out")
+  local args=('--no-notify' '--port' "$port_in" '--outgoing-port' "$port_out")
+  local func=boot_helper_start_daemon
 
-  boot_helper_start_daemon "starting statd on port $port_in (outgoing from port $port_out)" $PATH_BIN_STATD "${args[@]}"
+  if is_logging_debug; then
+    args+=('--no-syslog' '--foreground')
+    func=boot_helper_start_non_daemon
+  fi
+
+  $func "starting statd on port $port_in (outgoing from port $port_out)" $PATH_BIN_STATD "${args[@]}"
 }
 
 boot_main_nfsd() {
+
+  # https://linux.die.net/man/8/rpc.nfsd
+  #
+  # --debug  enable logging of debugging messages
+  # --port   specify a diferent port to listen on for NFS requests. by default, rpc.nfsd will listen on port 2049
+  # --tcp    explicitly enable TCP connections from clients
+  # --udp    explicitly enable UCP connections from clients
+  # nproc    specify the number of NFS server threads. by default, just one thread is started. however, for optimum
+  #          performance several threads should be used. the actual figure depends on the number of and the work load
+  #          created by the NFS clients, but a useful starting point is 8 threads. effects of modifying that number can
+  #          be checked using the nfsstat(8) program
 
   local version_flags
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
@@ -670,6 +719,9 @@ boot_main_nfsd() {
 
   boot_helper_start_daemon "starting rpc.nfsd on port $port with $threads server thread(s)" $PATH_BIN_NFSD "${args[@]}"
 
+  # rpcbind isn't required for NFSv4, but if it's not running then nfsd takes over 5 minutes to start up.
+  # it's a bug in either nfs-utils or the kernel, and the code of both is over my head.
+  # so as a workaround we start rpcbind always and (in v4-only scenarios) kill it after nfsd starts up
   if ! is_nfs3_enabled; then
     term_process "$PATH_BIN_RPCBIND"
   fi
@@ -681,9 +733,18 @@ boot_main_svcgssd() {
     return
   fi
 
+  # https://linux.die.net/man/8/rpc.svcgssd
+  #
+  # -f  runs rpc.svcgssd in the foreground and sends output to stderr (as opposed to syslogd)
+  # -v  increases the verbosity of the output (can be specified multiple times)
+  # -r  if the rpcsec_gss library supports setting debug level, increases the verbosity of the output (can be specified
+  #     multiple times)
+  # -i  if the nfsidmap library supports setting debug level, increases the verbosity of the output (can be specified
+  #     multiple times)
+
   local args=('-f')
   if is_logging_debug; then
-    args+=('-vvv')
+    args+=('-vvv' '-rrr' '-iii')
   fi
 
   boot_helper_start_non_daemon 'starting rpc.svcgssd' $PATH_BIN_RPC_SVCGSSD "${args[@]}"
