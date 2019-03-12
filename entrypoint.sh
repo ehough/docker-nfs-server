@@ -281,7 +281,7 @@ is_kernel_module_loaded() {
   return 1
 }
 
-has_linux_capability() {
+is_granted_linux_capability() {
 
   if capsh --print | grep -Eq "^Current: = .*,?${1}(,|$)"; then
     return 0
@@ -310,7 +310,7 @@ assert_kernel_mod() {
     return
   fi
 
-  if [[ ! -d /lib/modules ]] || ! has_linux_capability 'sys_module'; then
+  if [[ ! -d /lib/modules ]] || ! is_granted_linux_capability 'sys_module'; then
     bail "$module module is not loaded in the Docker host's kernel (try: modprobe $module)"
   fi
 
@@ -498,7 +498,7 @@ init_exports() {
 
 init_runtime_assertions() {
 
-  if ! has_linux_capability 'cap_sys_admin'; then
+  if ! is_granted_linux_capability 'cap_sys_admin'; then
     bail 'missing CAP_SYS_ADMIN. be sure to run this image with --cap-add SYS_ADMIN or --privileged'
   fi
 
