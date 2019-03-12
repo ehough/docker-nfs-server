@@ -151,15 +151,15 @@ on_failure() {
 ### process control
 ######################################################################################
 
-kill_process_if_running() {
+term_process() {
 
   local -r base=$(basename "$1")
   local -r pid=$(pidof "$base")
 
   if [[ -n $pid ]]; then
-    log "killing $base"
-    kill -TERM "$pid"
-    on_failure warn "unable to kill $base"
+    log "terminating $base"
+    kill "$pid"
+    on_failure warn "unable to terminate $base"
   else
     log "$base was not running"
   fi
@@ -180,10 +180,10 @@ stop_mount() {
     local args=()
     if is_logging_debug; then
       args+=('-v')
+      log "un-mounting $type filesystem from $path"
     fi
     args+=("$path")
 
-    log "un-mounting $type filesystem from $path"
     umount "${args[@]}"
     on_failure warn "unable to un-mount $type filesystem from $path"
 
@@ -194,9 +194,9 @@ stop_mount() {
 
 stop_nfsd() {
 
-  log 'stopping nfsd'
+  log 'terminating nfsd'
   $PATH_BIN_NFSD 0
-  on_failure warn 'unable to stop nfsd. if it had started already, check Docker host for lingering [nfsd] processes'
+  on_failure warn 'unable to terminate nfsd. if it had started already, check Docker host for lingering [nfsd] processes'
 }
 
 stop_exportfs() {
@@ -216,22 +216,22 @@ stop() {
   log_header 'terminating ...'
 
   if is_kerberos_requested; then
-    kill_process_if_running "$PATH_BIN_RPC_SVCGSSD"
+    term_process "$PATH_BIN_RPC_SVCGSSD"
   fi
 
   stop_nfsd
 
   if is_idmapd_requested; then
-    kill_process_if_running "$PATH_BIN_IDMAPD"
+    term_process "$PATH_BIN_IDMAPD"
   fi
 
   if is_nfs3_enabled; then
-    kill_process_if_running "$PATH_BIN_STATD"
+    term_process "$PATH_BIN_STATD"
   fi
 
-  kill_process_if_running "$PATH_BIN_MOUNTD"
+  term_process "$PATH_BIN_MOUNTD"
   stop_exportfs
-  kill_process_if_running "$PATH_BIN_RPCBIND"
+  term_process "$PATH_BIN_RPCBIND"
   stop_mount "$MOUNT_PATH_NFSD"
   stop_mount "$MOUNT_PATH_RPC_PIPEFS"
 
@@ -701,7 +701,7 @@ boot_main_nfsd() {
   boot_helper_start_daemon "starting rpc.nfsd on port $port with $threads server thread(s)" $PATH_BIN_NFSD "${args[@]}"
 
   if ! is_nfs3_enabled; then
-    kill_process_if_running "$PATH_BIN_RPCBIND"
+    term_process "$PATH_BIN_RPCBIND"
   fi
 }
 
