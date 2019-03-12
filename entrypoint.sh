@@ -69,6 +69,7 @@ readonly STATE_NFSD_PORT='nfsd_port'
 readonly STATE_MOUNTD_PORT='mountd_port'
 readonly STATE_STATD_PORT_IN='statd_port_in'
 readonly STATE_STATD_PORT_OUT='statd_port_out'
+readonly STATE_NFS_VERSION='nfs_version'
 
 # "state" is our only global variable, which is an associative array of normalized data
 declare -A state
@@ -246,7 +247,7 @@ stop() {
 
 get_requested_nfs_version() {
 
-  echo "${!ENV_VAR_NFS_VERSION:-$DEFAULT_NFS_VERSION}"
+  echo "${state[$STATE_NFS_VERSION]}"
 }
 
 get_requested_port_mountd() {
@@ -289,7 +290,10 @@ is_kernel_module_loaded() {
   local -r module=$1
 
   if lsmod | grep -Eq "^$module\\s+" || [[ -d "/sys/module/$module" ]]; then
-    log "kernel module $module is loaded"
+
+    if is_logging_debug; then
+      log "kernel module $module is loaded"
+    fi
     return 0
   fi
 
@@ -359,32 +363,6 @@ assert_port() {
   fi
 }
 
-assert_nfs_version() {
-
-  local -r requested_version="$(get_requested_nfs_version)"
-
-  echo "$requested_version" | grep -Eq '^3$|^4(\.[1-2])?$'
-  on_failure bail "please set $ENV_VAR_NFS_VERSION to one of: 4.2, 4.1, 4, 3"
-
-  if ! is_nfs3_enabled && [[ "$requested_version" = '3' ]]; then
-    bail 'you cannot simultaneously enable and disable NFS version 3'
-  fi
-}
-
-assert_at_least_one_export() {
-
-  # ensure /etc/exports has at least one line
-  grep -Evq "$REGEX_EXPORTS_LINES_TO_SKIP" $PATH_FILE_ETC_EXPORTS
-  on_failure bail "$PATH_FILE_ETC_EXPORTS has no exports"
-}
-
-assert_cap_sysadmin() {
-
-  if ! has_linux_capability 'cap_sys_admin'; then
-    bail 'missing CAP_SYS_ADMIN. be sure to run this image with --cap-add SYS_ADMIN or --privileged'
-  fi
-}
-
 
 ######################################################################################
 ### initialization
@@ -401,10 +379,10 @@ init_state_logging() {
 
   state[$STATE_LOG_LEVEL]=$normalized_log_level;
   state[$STATE_IS_LOGGING_INFO]=1
-  state[$STATE_IS_LOGGING_DEBUG]=0
 
   if [[ $normalized_log_level = "$LOG_LEVEL_DEBUG" ]]; then
     state[$STATE_IS_LOGGING_DEBUG]=1
+    log "log level set to $LOG_LEVEL_DEBUG"
   fi
 }
 
@@ -451,6 +429,20 @@ init_state_ports() {
   state[$STATE_STATD_PORT_OUT]=${!ENV_VAR_NFS_PORT_STATD_OUT:-$DEFAULT_NFS_PORT_STATD_OUT}
 }
 
+init_state_nfs_version() {
+
+  local -r requested_version="${!ENV_VAR_NFS_VERSION:-$DEFAULT_NFS_VERSION}"
+
+  echo "$requested_version" | grep -Eq '^3$|^4(\.[1-2])?$'
+  on_failure bail "please set $ENV_VAR_NFS_VERSION to one of: 4.2, 4.1, 4, 3"
+
+  if ! is_nfs3_enabled && [[ "$requested_version" = '3' ]]; then
+    bail 'you cannot simultaneously enable and disable NFS version 3'
+  fi
+
+  state[$STATE_NFS_VERSION]=$requested_version
+}
+
 init_trap() {
 
   trap stop SIGTERM SIGINT
@@ -460,88 +452,89 @@ init_exports() {
 
   # first, see if it's bind-mounted
   if mount | grep -Eq "^[^ ]+ on $PATH_FILE_ETC_EXPORTS type "; then
+
     if is_logging_debug; then
       log "$PATH_FILE_ETC_EXPORTS is bind-mounted"
     fi
-    return
-  fi
 
   # maybe it's baked-in to the image
-  if [[ -f $PATH_FILE_ETC_EXPORTS && -r $PATH_FILE_ETC_EXPORTS && -s $PATH_FILE_ETC_EXPORTS ]]; then
+  elif [[ -f $PATH_FILE_ETC_EXPORTS && -r $PATH_FILE_ETC_EXPORTS && -s $PATH_FILE_ETC_EXPORTS ]]; then
+
     if is_logging_debug; then
       log "$PATH_FILE_ETC_EXPORTS is baked into the image"
     fi
-    return
-  fi
 
-  local count_valid_exports=0
-  local exports=''
-  local candidate_export_vars
-  local candidate_export_var
+  # fallback to environment variables
+  else
 
-  # collect all candidate environment variable names
-  candidate_export_vars=$(compgen -A variable | grep -E 'NFS_EXPORT_[0-9]+' | sort)
-  on_failure bail 'failed to detect NFS_EXPORT_* variables'
+    local count_valid_exports=0
+    local exports=''
+    local candidate_export_vars
+    local candidate_export_var
 
-  if [[ -z "$candidate_export_vars" ]]; then
-    bail "please provide $PATH_FILE_ETC_EXPORTS to the container or set at least one NFS_EXPORT_* environment variable"
-  fi
+    # collect all candidate environment variable names
+    candidate_export_vars=$(compgen -A variable | grep -E 'NFS_EXPORT_[0-9]+' | sort)
+    on_failure bail 'failed to detect NFS_EXPORT_* variables'
 
-  log "building $PATH_FILE_ETC_EXPORTS from environment variables"
-
-  for candidate_export_var in $candidate_export_vars; do
-
-    local line="${!candidate_export_var}"
-
-    # skip comments and empty lines
-    if [[ "$line" =~ $REGEX_EXPORTS_LINES_TO_SKIP ]]; then
-      log_warning "skipping $candidate_export_var environment variable since it contains only whitespace or a comment"
-      continue;
+    if [[ -z "$candidate_export_vars" ]]; then
+      bail "please provide $PATH_FILE_ETC_EXPORTS to the container or set at least one NFS_EXPORT_* environment variable"
     fi
 
-    local line_as_array
-    read -r -a line_as_array <<< "$line"
-    local dir="${line_as_array[0]}"
+    log "building $PATH_FILE_ETC_EXPORTS from environment variables"
 
-    if [[ ! -d "$dir" ]]; then
-      log_warning "skipping $candidate_export_var environment variable since $dir is not a container directory"
-      continue
+    for candidate_export_var in $candidate_export_vars; do
+
+      local line="${!candidate_export_var}"
+
+      # skip comments and empty lines
+      if [[ "$line" =~ $REGEX_EXPORTS_LINES_TO_SKIP ]]; then
+        log_warning "skipping $candidate_export_var environment variable since it contains only whitespace or a comment"
+        continue;
+      fi
+
+      local line_as_array
+      read -r -a line_as_array <<< "$line"
+      local dir="${line_as_array[0]}"
+
+      if [[ ! -d "$dir" ]]; then
+        log_warning "skipping $candidate_export_var environment variable since $dir is not a container directory"
+        continue
+      fi
+
+      if [[ $count_valid_exports -gt 0 ]]; then
+        exports=$exports$'\n'
+      fi
+
+      exports=$exports$line
+
+      (( count_valid_exports++ ))
+
+    done
+
+    log "collected $count_valid_exports valid export(s) from NFS_EXPORT_* environment variables"
+
+    if [[ $count_valid_exports -eq 0 ]]; then
+      bail 'no valid exports'
     fi
 
-    if [[ $count_valid_exports -gt 0 ]]; then
-      exports=$exports$'\n'
-    fi
-
-    exports=$exports$line
-
-    (( count_valid_exports++ ))
-
-  done
-
-  log "collected $count_valid_exports valid export(s) from NFS_EXPORT_* environment variables"
-
-  if [[ $count_valid_exports -eq 0 ]]; then
-    bail 'no valid exports'
+    echo "$exports" > $PATH_FILE_ETC_EXPORTS
+    on_failure bail "unable to write to $PATH_FILE_ETC_EXPORTS"
   fi
 
-  echo "$exports" > $PATH_FILE_ETC_EXPORTS
-  on_failure bail "unable to write to $PATH_FILE_ETC_EXPORTS"
+  # make sure we have at least one export
+  grep -Evq "$REGEX_EXPORTS_LINES_TO_SKIP" $PATH_FILE_ETC_EXPORTS
+  on_failure bail "$PATH_FILE_ETC_EXPORTS has no exports"
 }
 
-init_assertions() {
+init_runtime_assertions() {
 
-  # validate any user-supplied environment variables
-  assert_nfs_version
+  if ! has_linux_capability 'cap_sys_admin'; then
+    bail 'missing CAP_SYS_ADMIN. be sure to run this image with --cap-add SYS_ADMIN or --privileged'
+  fi
 
   # check kernel modules
   assert_kernel_mod nfs
   assert_kernel_mod nfsd
-
-  # make sure we have at least one export
-  assert_at_least_one_export
-
-  # ensure we have CAP_SYS_ADMIN
-  assert_cap_sysadmin
 
   # perform Kerberos assertions
   if is_kerberos_requested; then
@@ -566,9 +559,9 @@ boot_helper_mount() {
 
   if is_logging_debug; then
     args+=('-vvv')
+    log "mounting $type filesystem onto $path"
   fi
 
-  log "mounting $type filesystem onto $path"
   mount "${args[@]}"
   on_failure stop "unable to mount $type filesystem onto $path"
 }
@@ -638,7 +631,7 @@ boot_main_exportfs() {
     args+=('-v')
   fi
 
-  boot_helper_start_daemon 'exporting filesystem(s)' $PATH_BIN_EXPORTFS "${args[@]}"
+  boot_helper_start_daemon 'starting exportfs' $PATH_BIN_EXPORTFS "${args[@]}"
 }
 
 boot_main_mountd() {
@@ -809,10 +802,11 @@ init() {
   log_header 'setting up ...'
 
   init_state_logging
-  init_exports
   init_state_nfsd_thread_count
   init_state_ports
-  init_assertions
+  init_state_nfs_version
+  init_exports
+  init_runtime_assertions
   init_trap
 
   log 'setup complete'
