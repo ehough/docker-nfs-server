@@ -28,7 +28,7 @@ Normal, non-debug logging will look something like this:
       SETTING UP ...
 ==================================================================
 ----> building /etc/exports from environment variables
-----> collected 4 valid export(s) from NFS_EXPORT_* environment variables
+----> collected 3 valid export(s) from NFS_EXPORT_* environment variables
 ----> setup complete
 
 ==================================================================
@@ -37,8 +37,8 @@ Normal, non-debug logging will look something like this:
 ----> starting rpcbind
 ----> starting exportfs
 ----> starting rpc.mountd on port 32767
-----> starting statd on port 32765 (outgoing from port 32766)
-----> starting idmapd
+----> starting rpc.statd on port 32765 (outgoing from port 32766)
+----> starting rpc.idmapd
 ----> starting rpc.nfsd on port 2049 with 16 server thread(s)
 ----> starting rpc.svcgssd
 ----> all services started normally
@@ -51,7 +51,6 @@ Normal, non-debug logging will look something like this:
 ---->   /nfs/htpc-media *(ro,no_subtree_check,insecure,async)
 ---->   /nfs/homes/staff *(rw,no_subtree_check,insecure,no_root_squash,sec=krb5p)
 ---->   /nfs/homes/ehough *(rw,no_subtree_check,insecure,no_root_squash,sec=krb5p)
----->   /nfs/backup/duplicacy *(rw,no_subtree_check,insecure,sec=krb5p,all_squash,anonuid=0,anongid=0)
 ----> list of container ports that should be exposed:
 ---->   111 (TCP and UDP)
 ---->   2049 (TCP and UDP)
@@ -75,7 +74,7 @@ Debug output will be much more detailed, and it may be very helpful when diagnos
 ----> log level set to DEBUG
 ----> will use requested rpc.nfsd thread count of 16
 ----> building /etc/exports from environment variables
-----> collected 4 valid export(s) from NFS_EXPORT_* environment variables
+----> collected 3 valid export(s) from NFS_EXPORT_* environment variables
 ----> kernel module nfs is loaded
 ----> kernel module nfsd is loaded
 ----> kernel module rpcsec_gss_krb5 is loaded
@@ -90,28 +89,12 @@ mount: mount('rpc_pipefs','/var/lib/nfs/rpc_pipefs','rpc_pipefs',0x00008000,'(nu
 mount: mount('nfsd','/proc/fs/nfsd','nfsd',0x00008000,'(null)'):0
 ----> starting rpcbind
 ----> starting exportfs
-exporting *:/nfs/backup/duplicacy
 exporting *:/nfs/homes/ehough
 exporting *:/nfs/homes/staff
 exporting *:/nfs/htpc-media
 ----> starting rpc.mountd on port 32767
-----> starting statd on port 32765 (outgoing from port 32766)
-----> starting idmapd
-rpc.idmapd: Setting log level to 11
-
-rpc.idmapd: libnfsidmap: using domain: hough.matis
-rpc.idmapd: libnfsidmap: Realms list: 'HOUGH.MATIS' 
-rpc.idmapd: libnfsidmap: processing 'Method' list
-rpc.idmapd: static_getpwnam: name 'nfs/blue@HOUGH.MATIS' mapped to 'root'
-rpc.idmapd: static_getpwnam: localname 'melissa' for 'melissa@HOUGH.MATIS' not found
-rpc.idmapd: static_getpwnam: name 'ehough@HOUGH.MATIS' mapped to 'ehough'
-rpc.idmapd: static_getgrnam: group 'nfs/blue@HOUGH.MATIS' mapped to 'root'
-rpc.idmapd: static_getgrnam: local group 'melissa' for 'melissa@HOUGH.MATIS' not found
-rpc.idmapd: static_getgrnam: group 'ehough@HOUGH.MATIS' mapped to 'ehough'
-rpc.idmapd: libnfsidmap: loaded plugin /usr/lib/libnfsidmap/static.so for method static
-rpc.idmapd: Expiration time is 600 seconds.
-rpc.idmapd: Opened /proc/net/rpc/nfs4.nametoid/channel
-rpc.idmapd: Opened /proc/net/rpc/nfs4.idtoname/channel
+----> starting rpc.statd on port 32765 (outgoing from port 32766)
+----> starting rpc.idmapd
 ----> starting rpc.nfsd on port 2049 with 16 server thread(s)
 rpc.nfsd: knfsd is currently down
 rpc.nfsd: Writing version string to kernel: -2 +3 +4 +4.1 +4.2
@@ -119,7 +102,23 @@ rpc.nfsd: Created AF_INET TCP socket.
 rpc.nfsd: Created AF_INET UDP socket.
 rpc.nfsd: Created AF_INET6 TCP socket.
 rpc.nfsd: Created AF_INET6 UDP socket.
+rpc.idmapd: Setting log level to 11
+
 ----> starting rpc.svcgssd
+rpc.idmapd: libnfsidmap: using domain: hough.matis
+rpc.idmapd: libnfsidmap: Realms list: 'HOUGH.MATIS' 
+rpc.idmapd: libnfsidmap: processing 'Method' list
+rpc.idmapd: static_getpwnam: name 'nfs/blue@HOUGH.MATIS' mapped to 'root'
+rpc.idmapd: static_getpwnam: localname 'melissa' for 'melissa@HOUGH.MATIS' not found
+rpc.idmapd: static_getpwnam: name 'ehough@HOUGH.MATIS' mapped to 'ehough'
+libtirpc: debug level 3
+rpc.idmapd: static_getgrnam: group 'nfs/blue@HOUGH.MATIS' mapped to 'root'
+rpc.idmapd: static_getgrnam: local group 'melissa' for 'melissa@HOUGH.MATIS' not found
+rpc.idmapd: static_getgrnam: group 'ehough@HOUGH.MATIS' mapped to 'ehough'
+rpc.idmapd: libnfsidmap: loaded plugin /usr/lib/libnfsidmap/static.so for method static
+rpc.idmapd: Expiration time is 600 seconds.
+rpc.idmapd: Opened /proc/net/rpc/nfs4.nametoid/channel
+rpc.idmapd: Opened /proc/net/rpc/nfs4.idtoname/channel
 entering poll
 ----> all services started normally
 
@@ -128,7 +127,6 @@ entering poll
 ==================================================================
 ----> list of enabled NFS protocol versions: 4.2, 4.1, 4, 3
 ----> list of container exports:
----->   /nfs/backup/duplicacy   *(rw,sync,wdelay,hide,nocrossmnt,insecure,root_squash,all_squash,no_subtree_check,secure_locks,acl,no_pnfs,anonuid=0,anongid=0,sec=krb5p,rw,insecure,root_squash,all_squash)
 ---->   /nfs/homes/ehough       *(rw,sync,wdelay,hide,nocrossmnt,insecure,no_root_squash,no_all_squash,no_subtree_check,secure_locks,acl,no_pnfs,anonuid=65534,anongid=65534,sec=krb5p,rw,insecure,no_root_squash,no_all_squash)
 ---->   /nfs/homes/staff        *(rw,sync,wdelay,hide,nocrossmnt,insecure,no_root_squash,no_all_squash,no_subtree_check,secure_locks,acl,no_pnfs,anonuid=65534,anongid=65534,sec=krb5p,rw,insecure,no_root_squash,no_all_squash)
 ---->   /nfs/htpc-media *(ro,async,wdelay,hide,nocrossmnt,insecure,root_squash,no_all_squash,no_subtree_check,secure_locks,acl,no_pnfs,anonuid=65534,anongid=65534,sec=sys,ro,insecure,root_squash,no_all_squash)
@@ -141,6 +139,14 @@ entering poll
 ==================================================================
       READY AND WAITING FOR NFS CLIENT CONNECTIONS
 ==================================================================
+rpc.statd: Version 2.3.2 starting
+rpc.statd: Flags: No-Daemon Log-STDERR TI-RPC 
+rpc.statd: Failed to read /var/lib/nfs/state: Address in use
+rpc.statd: Initializing NSM state
+rpc.statd: Local NSM state number: 3
+rpc.statd: Failed to open /proc/sys/fs/nfs/nsm_local_state: Read-only file system
+rpc.statd: Running as root.  chown /var/lib/nfs to choose different user
+rpc.statd: Waiting for client connections
 leaving poll
 handling null request
 svcgssd_limit_krb5_enctypes: Calling gss_set_allowable_enctypes with 7 enctypes from the kernel

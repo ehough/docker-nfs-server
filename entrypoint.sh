@@ -434,7 +434,7 @@ init_exports() {
       log "$PATH_FILE_ETC_EXPORTS is baked into the image"
     fi
 
-  # fallback to environment variables
+  # fall back to environment variables
   else
 
     local count_valid_exports=0
@@ -576,9 +576,9 @@ boot_helper_start_non_daemon() {
 
   local -r bg_pid=$!
 
-  # somewhat arbitrary assumption that if the process isn't dead already, it will die within 1/20 of a second. for our
+  # somewhat arbitrary assumption that if the process isn't dead already, it will die within a millisecond. for our
   # purposes this works just fine, but if someone has a better solution please open a PR.
-  sleep .05
+  sleep .001
   kill -0 $bg_pid 2> /dev/null
   on_failure stop "$process failed"
 }
@@ -660,7 +660,7 @@ boot_main_idmapd() {
     func=boot_helper_start_non_daemon
   fi
 
-  $func 'starting idmapd' $PATH_BIN_IDMAPD "${args[@]}"
+  $func 'starting rpc.idmapd' $PATH_BIN_IDMAPD "${args[@]}"
 }
 
 boot_main_statd() {
@@ -691,7 +691,7 @@ boot_main_statd() {
     func=boot_helper_start_non_daemon
   fi
 
-  $func "starting statd on port $port_in (outgoing from port $port_out)" $PATH_BIN_STATD "${args[@]}"
+  $func "starting rpc.statd on port $port_in (outgoing from port $port_out)" $PATH_BIN_STATD "${args[@]}"
 }
 
 boot_main_nfsd() {
