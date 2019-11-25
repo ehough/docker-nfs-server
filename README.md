@@ -26,14 +26,14 @@ This is the only containerized NFS server that offers **all** of the following f
 * Optional features
   * [Debug logging](doc/feature/logging.md)
   * [Kerberos security](doc/feature/kerberos.md)
-  * [NFSv4 user ID mapping](doc/feature/nfsv4-user-id-mapping.md)
+  * [NFSv4 user ID mapping](doc/feature/nfs4-user-id-mapping.md)
   * [AppArmor integration](doc/feature/apparmor.md)
 * Advanced
   * [automatically load required kernel modules](doc/feature/auto-load-kernel-modules.md)
   * [custom server ports](doc/advanced/ports.md)
   * [custom NFS versions offered](doc/advanced/nfs-versions.md)
   * [performance tuning](doc/advanced/performance-tuning.md)
-* [Help!](#help!)
+* [Help!](#help)
 * [Remaining tasks](#remaining-tasks)
 * [Acknowledgements](#acknowledgements)
 
@@ -163,8 +163,8 @@ Please [open an issue](https://github.com/ehough/docker-nfs-server/issues) if yo
 
 ## Remaining tasks
 
-- figure out why `rpc.nfsd` takes 5 minutes to startup/timeout unless `rpcbind` is running
-- add more examples, including Docker Compose
+- figure out why `rpc.nfsd` [takes 5 minutes to startup/timeout](https://www.spinics.net/lists/linux-nfs/msg59728.html) unless `rpcbind` is running
+- add more examples
 
 ## Acknowledgements
 
