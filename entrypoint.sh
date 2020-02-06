@@ -5,7 +5,7 @@
 # https://hub.docker.com/r/erichough/nfs-server
 # https://github.com/ehough/docker-nfs-server
 #
-# Copyright (C) 2017-2019  Eric D. Hough
+# Copyright (C) 2017-2020  Eric D. Hough
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -76,16 +76,6 @@ declare -A state
 
 
 ######################################################################################
-### string utils
-######################################################################################
-
-toupper() {
-
-  echo "$1" | awk '{ print toupper($0) }'
-}
-
-
-######################################################################################
 ### logging
 ######################################################################################
 
@@ -110,7 +100,7 @@ log_header() {
 
   echo "
 ==================================================================
-      $(toupper "$1")
+      ${1^^}
 =================================================================="
 }
 
@@ -341,7 +331,8 @@ assert_port() {
 init_state_logging() {
 
   # if the user didn't request a specific log level, the default is INFO
-  local -r normalized_log_level=$(toupper "${!ENV_VAR_NFS_LOG_LEVEL:-$LOG_LEVEL_INFO}")
+  local incoming_log_level="${!ENV_VAR_NFS_LOG_LEVEL:-$LOG_LEVEL_INFO}"
+  local -r normalized_log_level="${incoming_log_level^^}"
 
   if ! echo "$normalized_log_level" | grep -Eq 'DEBUG|INFO'; then
     bail "the only acceptable values for $ENV_VAR_NFS_LOG_LEVEL are: DEBUG, INFO"
