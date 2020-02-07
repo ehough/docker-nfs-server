@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [unreleased]
 
+### Fixed
+* Broken links in README, both on GitHub and Docker Hub ([#29](https://github.com/ehough/docker-nfs-server/issues/29), [#35](https://github.com/ehough/docker-nfs-server/issues/35))
+
 ### Changed
 * Use pure Bash for uppercasing strings ([#36](https://github.com/ehough/docker-nfs-server/issues/36))
 
