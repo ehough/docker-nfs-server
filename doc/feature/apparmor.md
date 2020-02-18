@@ -14,10 +14,13 @@ If your Docker host has [AppArmor](https://wiki.ubuntu.com/AppArmor) activated, 
          mount fstype=nfs*,
          mount fstype=rpc_pipefs,
        }
-       
+
 1. Load this profile into the kernel with [`apparmor_parser`](http://manpages.ubuntu.com/manpages/xenial/man8/apparmor_parser.8.html):
 
        $ sudo apparmor_parser -r -W /path/to/file/from/previous/step
+
+> `abstractions/lxc/container-base` may be missing when adding `AppArmor` profile.
+>  In such case, install `lxc` package: `sudo apt install lxc`.
 
 1. Add `--security-opt apparmor=erichough-nfs` to your `docker run` command. e.g.
 
@@ -28,9 +31,9 @@ If your Docker host has [AppArmor](https://wiki.ubuntu.com/AppArmor) activated, 
          -p 2049:2049                            \
          --security-opt apparmor=erichough-nfs   \
          erichough/nfs-server
-         
+
    or in `docker-compose.yml`:
-   
+
    ```YAML
    version: 3
    services:
