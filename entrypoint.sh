@@ -702,7 +702,7 @@ boot_main_nfsd() {
   read -r -a version_flags <<< "$(boot_helper_get_version_flags)"
   local -r threads="${state[$STATE_NFSD_THREAD_COUNT]}"
   local -r port="${state[$STATE_NFSD_PORT]}"
-  local args=('--tcp' '--udp' '--port' "$port" "${version_flags[@]}" "$threads")
+  local args=('--tcp' '--udp' '-G' '10' '--port' "$port" "${version_flags[@]}" "$threads")
 
   if is_logging_debug; then
     args+=('--debug')
