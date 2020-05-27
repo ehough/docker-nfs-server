@@ -15,6 +15,9 @@ RUN mkdir -p /var/lib/nfs/rpc_pipefs                                            
 
 EXPOSE 2049
 
+HEALTHCHECK --interval=10s --timeout=5s --retries=5 \
+	CMD exportfs || exit 1
+
 # setup entrypoint
 COPY ./entrypoint.sh /usr/local/bin
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
