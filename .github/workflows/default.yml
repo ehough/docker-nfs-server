@@ -1,0 +1,98 @@
+name: default
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+      - releases/**
+  pull_request:
+    branches:
+      - master
+      - develop
+      - releases/**
+
+env:
+  BUILD_VERSION: v2.2.1
+  DOCKER_CLI_EXPERIMENTAL: enabled
+
+jobs:
+
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        PLATFORM: [linux/amd64,linux/arm64,linux/ppc64le,linux/386,linux/arm/v7,linux/arm/v6]
+
+    steps:
+      - name: docker install
+        run: curl -fsSL get.docker.com | sh
+
+      - name: source checkout
+        uses: actions/checkout@v1
+
+      - name: qemu register
+        run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+      
+      - name: buildx create
+        run: docker buildx create --use --driver docker-container
+
+      - name: image build
+        run: docker buildx build . --pull --platform ${{ matrix.PLATFORM }} --tag ${GITHUB_REPOSITORY} --load
+
+      - name: image test
+        run: |
+          modprobe nfs
+          modprobe nfsd
+          docker run --rm -d --name nfs-server -v "$(mktemp -d):/srv/nfs/tmp" --privileged -e NFS_EXPORT_0='/srv/nfs/tmp  *(ro,no_subtree_check)' ${GITHUB_REPOSITORY}
+          sleep 5
+          docker log nfs-server | tee /dev/stderr | grep -q "READY AND WAITING FOR NFS CLIENT CONNECTIONS"
+          docker stop nfs-server
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      # - name: set BUILD_DATE
+      #   run: echo "::set-env name=BUILD_DATE::$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+      # - name: set VCS_REF
+      #   run: echo "::set-env name=VCS_REF::$(git describe --tags --always --dirty)"
+
+      - name: docker install
+        run: curl -fsSL get.docker.com | sh
+
+      - name: source checkout
+        uses: actions/checkout@v1
+
+      - name: github login
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u "${GITHUB_ACTOR}" --password-stdin
+
+      - name: dockerhub login
+        run: echo "${{ secrets.DOCKERHUB_PASSWORD }}" | docker login docker.io -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+      
+      - name: qemu register
+        run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+      
+      - name: buildx create
+        run: docker buildx create --use --driver docker-container
+
+      - name: manifest build
+        run: >-
+            docker buildx build . --pull --push
+            --platform=linux/amd64,linux/arm64,linux/ppc64le,linux/386,linux/arm/v7,linux/arm/v6
+            --label "org.opencontainers.image.version=${BUILD_VERSION}"
+            --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            --label "org.opencontainers.image.revision=$(git describe --tags --always --dirty)"
+            --tag docker.io/${{ secrets.DOCKERHUB_REPOSITORY }}:${BUILD_VERSION}
+            --tag docker.io/${{ secrets.DOCKERHUB_REPOSITORY }}:latest
+
+      - name: dockerhub description
+        uses: peter-evans/dockerhub-description@v2.1.0
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+          DOCKERHUB_REPOSITORY: ${{ secrets.DOCKERHUB_REPOSITORY }}
