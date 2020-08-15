@@ -43,8 +43,8 @@ jobs:
 
       - name: image test
         run: |
-          modprobe nfs
-          modprobe nfsd
+          sudo modprobe nfs
+          sudo modprobe nfsd
           docker run --rm -d --name nfs-server -v "$(mktemp -d):/srv/nfs/tmp" --privileged -e NFS_EXPORT_0='/srv/nfs/tmp  *(ro,no_subtree_check)' ${GITHUB_REPOSITORY}
           sleep 5
           docker log nfs-server | tee /dev/stderr | grep -q "READY AND WAITING FOR NFS CLIENT CONNECTIONS"
