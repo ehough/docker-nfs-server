@@ -272,6 +272,7 @@ is_kernel_module_loaded() {
 }
 
 is_granted_linux_capability() {
+
   if capsh --print | grep -Eq "^Current:.*,?${1}(,|$)"; then
     return 0
   fi

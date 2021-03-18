@@ -3,6 +3,7 @@ ARG BUILD_FROM=alpine:latest
 FROM $BUILD_FROM
 
 RUN apk --update --no-cache add bash nfs-utils && \
+                                                  \
     # remove the default config files
     rm -v /etc/idmapd.conf /etc/exports
 
