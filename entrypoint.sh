@@ -442,6 +442,7 @@ init_exports() {
 
     log "building $PATH_FILE_ETC_EXPORTS from environment variables"
 
+    mkdir -p /share && chmod a+rwxt /share
     exports='/share *(ro,async,no_subtree_check,no_auth_nlm,insecure,no_root_squash,fsid=root)'
     exports=$exports$'\n'
 
