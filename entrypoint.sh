@@ -459,7 +459,7 @@ init_exports() {
 
       if [[ ! -d "$dir" ]]; then
         log_warning "skipping $candidate_export_var environment variable since $dir is not a container directory"
-        continue
+        mkdir -p "$dir"
       fi
 
       if [[ $count_valid_exports -gt 0 ]]; then
