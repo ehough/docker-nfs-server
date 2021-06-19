@@ -273,7 +273,7 @@ is_kernel_module_loaded() {
 
 is_granted_linux_capability() {
 
-  if capsh --has-p=${1}; then
+  if capsh --has-p=${1} || capsh --has-p=cap_${1}; then
     return 0
   fi
   
