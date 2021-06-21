@@ -273,13 +273,12 @@ is_kernel_module_loaded() {
 
 is_granted_linux_capability() {
 
-  if capsh --print | grep -Eq "^Current: = .*,?${1}(,|$)"; then
+  if capsh --has-p=${1} || capsh --has-p=cap_${1}; then
     return 0
   fi
-
+  
   return 1
 }
-
 
 ######################################################################################
 ### runtime configuration assertions
@@ -443,6 +442,10 @@ init_exports() {
 
     log "building $PATH_FILE_ETC_EXPORTS from environment variables"
 
+    mkdir -p /share && chmod a+rwxt /share
+    exports='/share *(ro,async,no_subtree_check,no_auth_nlm,insecure,no_root_squash,fsid=root)'
+    exports=$exports$'\n'
+
     for candidate_export_var in $candidate_export_vars; do
 
       local line="${!candidate_export_var}"
@@ -591,6 +594,10 @@ boot_main_exportfs() {
   if is_logging_debug; then
     args+=('-v')
   fi
+
+  echo 'Generated /etc/exports:'
+  cat /etc/exports
+  echo ''
 
   boot_helper_start_daemon 'starting exportfs' $PATH_BIN_EXPORTFS "${args[@]}"
 }
