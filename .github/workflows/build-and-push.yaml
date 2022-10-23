@@ -11,7 +11,7 @@ env:
   # Use docker.io for Docker Hub if empty
   REGISTRY: harbor.obeone.cloud
   # github.repository as <account>/<repo>
-  IMAGE_NAME: public/docker-nfs-server
+  IMAGE_NAME: public/nfs-server
 
 jobs:
   Build:
