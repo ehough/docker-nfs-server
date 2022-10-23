@@ -83,7 +83,7 @@ jobs:
           
           # pull: true
           # load: true
-          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/master' }}
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.semver_parser.outputs.major }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.semver_parser.outputs.major }}.${{ steps.semver_parser.outputs.minor }}
