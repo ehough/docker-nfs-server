@@ -3,11 +3,7 @@ on:
   schedule:
     - cron: '23 2 * * *'
   push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
 
 
 
@@ -52,23 +48,13 @@ jobs:
       # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
       - name: Log into registry ${{ env.REGISTRY }}
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
         uses: docker/login-action@28218f9b04b4f3f62068d7b6ce6ca5b26e35336c
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.REGISTRY_USER }}
           password: ${{ secrets.REGISTRY_PW }}
 
-      - name: Build image
-        id: build
-        uses: docker/build-push-action@ac9327eae2b366085ac7f6a2d02df8aa8ead720a
-        with:
-          context: .
-          pull: true
-          load: true
-          tags: docker-nfs-server:latest,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          cache-to: type=gha,mode=max
-          cache-from: type=gha,mode=max
           
       - name: Finding latest release
         id: version
@@ -83,16 +69,21 @@ jobs:
         with: 
           input_string: "${{ steps.version.outputs.release }}"
 
-
-      - name: Publish image
-        id: push
-        uses: docker/build-push-action@ac9327eae2b366085ac7f6a2d02df8aa8ead720a
+      - name: Build image
+        id: build
+        uses: docker/build-push-action@v2
         with:
           context: .
-          push: true
-          pull: true
-          cache-to: type=gha,mode=max
-          cache-from: type=gha,mode=max
+          platforms: |
+            linux/amd64
+            linux/arm64
+            linux/i386
+            linux/armhf
+            linux/armel
+          
+          # pull: true
+          # load: true
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/master' }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.semver_parser.outputs.major }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.semver_parser.outputs.major }}.${{ steps.semver_parser.outputs.minor }}
