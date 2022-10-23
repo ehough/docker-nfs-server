@@ -2,7 +2,11 @@
 #
 # ehough/docker-nfs-server: A lightweight, robust, flexible, and containerized NFS server.
 #
-# https://hub.docker.com/r/erichough/nfs-server
+# https://github.com/obeone/docker-nfs-server
+# https://github.com/obeone/docker-nfs-server/pkgs/container/docker-nfs-server
+#
+# Almost all the work is from @ehough, I just created workflow to keep the
+# docker image up-to-date and build for multiple architectures
 # https://github.com/ehough/docker-nfs-server
 #
 # Copyright (C) 2017-2020  Eric D. Hough

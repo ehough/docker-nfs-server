@@ -27,7 +27,7 @@ If your Docker host has [AppArmor](https://wiki.ubuntu.com/AppArmor) activated, 
          --cap-add SYS_ADMIN                     \
          -p 2049:2049                            \
          --security-opt apparmor=erichough-nfs   \
-         erichough/nfs-server
+         ghcr.io/obeone/nfs-server
          
    or in `docker-compose.yml`:
    
@@ -35,7 +35,7 @@ If your Docker host has [AppArmor](https://wiki.ubuntu.com/AppArmor) activated, 
    version: 3
    services:
      nfs:
-       image: erichough/nfs-server
+       image: ghcr.io/obeone/nfs-server
        volumes:
          - /path/to/share:/nfs
          - /path/to/exports.txt:/etc/exports:ro

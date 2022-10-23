@@ -18,4 +18,4 @@ Here's an example:
       -v /host/path/to/server.krb5conf:/etc/krb5.conf:ro  \
       --cap-add SYS_ADMIN                                 \
       -p 2049:2049                                        \
-      erichough/nfs-server
+      ghcr.io/obeone/nfs-server
