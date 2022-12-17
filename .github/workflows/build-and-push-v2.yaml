@@ -74,14 +74,15 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           images: ${{ env.IMAGES }}
           tags: |
+            type=raw,value=latest,enable=${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main'  }}
             type=ref,event=branch
             type=ref,event=pr
-            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern=v{{version}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern=v{{major}}.{{minor}},value=${{ steps.version.outputs.version }}
-            type=semver,pattern=v{{major}},value=${{ steps.version.outputs.version }}
+            type=raw,value=${{ steps.semver_parser.outputs.major }},enable=${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main'  }}
+            type=raw,value=${{ steps.semver_parser.outputs.major }}.${{ steps.semver_parser.outputs.minor }},enable=${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main'  }}
+            type=raw,value=${{ steps.semver_parser.outputs.major }}.${{ steps.semver_parser.outputs.minor }}.${{ steps.semver_parser.outputs.patch }},enable=${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main'  }}
+            type=raw,value=v${{ steps.semver_parser.outputs.major }},enable=${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main'  }}
+            type=raw,value=v${{ steps.semver_parser.outputs.major }}.${{ steps.semver_parser.outputs.minor }},enable=${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main'  }}
+            type=raw,value=v${{ steps.semver_parser.outputs.major }}.${{ steps.semver_parser.outputs.minor }}.${{ steps.semver_parser.outputs.patch }},enable=${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main'  }}
 
       - name: Build image
         id: build
@@ -95,14 +96,12 @@ jobs:
             linux/armhf
             linux/armel
 
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           pull: true
           cache-to: type=gha,mode=max
-          cache-from:
-            type=gha,mode=maxs.semver_parser.outputs.major }}.${{ steps.semver_parser.outputs.minor }}.${{ steps.semver_parser.outputs.patch }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha,mode=max
 
       - name: Sign the images with GitHub OIDC Token
         run: |
@@ -110,10 +109,10 @@ jobs:
 
           # In variables, "%%*( )" trim whitespace at beggining and end of variable
           for image in ${IMAGES}; do
-            cosign sign "${image%%*( )}@${DIGEST%%*( )}"
+            yes | cosign sign "${image%%*( )}@${DIGEST%%*( )}"
           done
         env:
           TAGS: ${{ steps.meta.outputs.tags }}
           DIGEST: ${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: true
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
