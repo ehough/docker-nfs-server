@@ -107,11 +107,13 @@ jobs:
       - name: Sign the images with GitHub OIDC Token
         run: |
           set -e
-          for image in "${IMAGES}"; do
-            yes | cosign sign ${image}@${DIGEST}
+
+          # In variables, "%%*( )" trim whitespace at beggining and end of variable
+          for image in ${IMAGES}; do
+            cosign sign "${image%%*( )}@${DIGEST%%*( )}"
           done
         env:
-          TAGS: ${{ steps.build.outputs.tags }}
+          TAGS: ${{ steps.meta.outputs.tags }}
           DIGEST: ${{ steps.build.outputs.digest }}
           COSIGN_EXPERIMENTAL: true
         if: github.event_name != 'pull_request'
