@@ -1,0 +1,117 @@
+name: Build and publish
+on:
+  schedule:
+    - cron: "23 3 * * *"
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  # github.repository as <account>/<repo>
+  IMAGE_NAME: nfs-server
+  IMAGES: |
+    docker.io/obebete/nfs-server
+    ghcr.io/obeone/nfs-server
+
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      # This is used to complete the identity challenge
+      # with sigstore/fulcio when running outside of PRs.
+      id-token: write
+
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: docker.io
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@main
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Finding latest release
+        id: version
+        uses: pozetroninc/github-action-get-latest-release@master
+        with:
+          repository: ${{ github.repository }}
+
+      - name: Parse semver string
+        id: semver_parser
+        uses: booxmedialtd/ws-action-parse-semver@v1
+        with:
+          input_string: "${{ steps.version.outputs.release }}"
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          images: ${{ env.IMAGES }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern=v{{version}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern=v{{major}}.{{minor}},value=${{ steps.version.outputs.version }}
+            type=semver,pattern=v{{major}},value=${{ steps.version.outputs.version }}
+
+      - name: Build image
+        id: build
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          platforms: |
+            linux/amd64
+            linux/arm64
+            linux/i386
+            linux/armhf
+            linux/armel
+
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          pull: true
+          cache-to: type=gha,mode=max
+          cache-from:
+            type=gha,mode=maxs.semver_parser.outputs.major }}.${{ steps.semver_parser.outputs.minor }}.${{ steps.semver_parser.outputs.patch }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Sign the images with GitHub OIDC Token
+        run: |
+          set -e
+          for image in "${IMAGES}"; do
+            yes | cosign sign ${image}@${DIGEST}
+          done
+        env:
+          TAGS: ${{ steps.build.outputs.tags }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          COSIGN_EXPERIMENTAL: true
+        if: github.event_name != 'pull_request'
