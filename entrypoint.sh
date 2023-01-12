@@ -277,7 +277,7 @@ is_kernel_module_loaded() {
 
 is_granted_linux_capability() {
 
-  if capsh --print | grep -Eq "^Current: = .*,?${1}(,|$)"; then
+  if capsh --decode=$(grep CapBnd /proc/$$/status|cut -f2) | grep cap_sys_admin > /dev/null; then
     return 0
   fi
 
